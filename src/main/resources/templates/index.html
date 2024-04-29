@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Java Container Scene</title>
+</head>
+<body>
+<h1>Java Container Scene Exception Set</h1>
+
+
+在JVM内存区域中，除了程序计数器外，其他内存区域都有可能发生OOM异常，下面我们来一一模拟每个内存区域OOM异常的场景。<br>
+先介绍几个JVM参数：<br>
+-Xms：设置JVM初始堆内存的大小。<br>
+-Xmx：设置JVM最大堆内存的大小。<br>
+-Xmn: 设置年轻代的大小、<br>
+-Xss：设置每个线程对应的栈的大小。<br>
+-XX:+HeapDumpOnOutOfMemoryError：发生OOM异常时生成heap dump文件<br>
+-XX:HeapDumpPath=path：heap dump文件生成的路径，例如XX:HeapDumpPath=/var/log/java/java_heapdump.hprof<br>
+-XX:+PrintGCDetails：打印GC的详细信息。<br>
+-XX:+PrintGCTimeStamps：打印GC的时间戳。<br>
+-XX:MetaspaceSize：设置元空间触发垃圾回收的大小。<br>
+-XX:MaxMetaspaceSize：设置元空间的最大值。<br>
+
+
+<h2>当前HostName/IP:</h2>
+<a>主机名：  </a><a th:text="${HostName}"></a><br>
+<a>IP：  </a><a th:text="${HostAddrr}"></a><br>
+
+
+<h2>当前DNS信息:</h2>
+<ul>
+    <li th:each="item : ${dnsInfo}" th:text="${item}"></li>
+</ul>
+
+<h2>当前系统时间:</h2>
+<a>当前时间：  </a><a th:text="${currentTime}"></a><br>
+<a>时区：  </a><a th:text="${TimeZone}"></a><br>
+<a>时差：  </a><a th:text="${TimeOffset}"></a><br>
+
+<h2>当前CPU/MEM:</h2>
+<a>内存总量(Byte)：  </a><a th:text="${memTotal}"></a><br>
+<a>可用内存(Byte)：  </a><a th:text="${freeMem}"></a><br>
+<a>已用内存(Byte)：  </a><a th:text="${usedMem}"></a><br>
+<a>CPU核数：  </a><a th:text="${core}"></a><br>
+
+<h2>当前JVM参数:</h2>
+<ul>
+    <li th:each="item : ${jvmArg}" th:text="${item}"></li>
+</ul>
+<h2>当前环境变量:</h2>
+<ul>
+    <li th:each="item : ${envSystem}" th:text="${item}"></li>
+</ul>
+
+<div>
+    <a href="/actuator/health">健康检查</a>
+</div>
+<div>
+    <a href="/actuator/prometheus">Prometheus</a>
+</div>
+<div>
+    <a href="/scene/HeapOOM">堆OOM</a>
+</div>
+<div>
+    <a href="/scene/StackOOM">栈OOM</a>
+</div>
+<div>
+    <a href="/scene/MetaOOM">元数据空间OOM</a>
+</div>
+<div>
+    <a href="/scene/DirectMemOOM">直接内存OOM</a>
+</div>
+<div>
+    <a href="/scene/LocalMemOOM">本地内存OOM</a>
+</div>
+<div>
+    <a href="/scene/StdOut">大量标准输出</a>
+</div>
+<div>
+    <a href="/scene/HighMemReadFile">循环读大文件到内存</a>
+</div>
+<div>
+    <a href="/scene/ManyThread">循环创建线程-每个线程休眠600s</a>
+</div><div>
+    <a href="/scene/BigFile">每次追加写100MB大文件</a>
+</div>
+
+<div>
+</div>
+</body>
+</html>

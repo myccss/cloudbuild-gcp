@@ -4,6 +4,8 @@ MAINTAINER  mycc
 
 
 WORKDIR /data
-COPY  javacontainer-1.0.1-SNAPSHOT.jar  /data/app.jar
+ARG JAR_FILE=JAR_FILE_MUST_BE_SPECIFIED_AS_BUILD_ARG
+COPY ${JAR_FILE} /data/app.jar
+
 ENV JAVA_OPTS=""
 ENTRYPOINT exec java $JAVA_OPTS -jar app.jar
