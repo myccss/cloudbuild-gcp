@@ -7,7 +7,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building..'
-                sh 'gcloud builds submit --config cloudbuild.yaml --no-source'
+                sh 'gcloud builds submit --config cloudbuild.yaml --source-directory ./'
             }
         }
     }
