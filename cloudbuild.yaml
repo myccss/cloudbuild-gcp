@@ -1,4 +1,4 @@
 steps:
 - name: gcr.io/cloud-builders/docker
-  args: ['build', '-t', 'asia-southeast1-docker.pkg.dev/solid-photon-196602/myxcc', '.']
+  args: ['build', '-t', 'asia-southeast1-docker.pkg.dev/solid-photon-196602/myxcc:v1', '.']
 images: ['asia-southeast1-docker.pkg.dev/solid-photon-196602/myxcc']

@@ -7,7 +7,8 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building..'
-                sh 'gcloud builds submit --config cloudbuild.yaml --git-source-dir "https://github.com/owner/repo" --git-source-revision=main'
+                sh 'gcloud builds submit --config cloudbuild.yaml'
+                #sh 'gcloud builds submit --config cloudbuild.yaml --git-source-dir "https://github.com/myccss/cloudbuild-gcp" --git-source-revision=main'
             }
         }
     }
