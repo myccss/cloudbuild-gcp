@@ -7,8 +7,8 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building..'
-                sh 'gcloud  auth activate-service-account   --key-file=/tmp/cloud-sa.json --no-source'
-                sh 'gcloud builds submit --config cloudbuild.yaml'
+                sh 'gcloud  auth activate-service-account   --key-file=/tmp/cloud-sa.json'
+                sh 'gcloud builds submit --config cloudbuild.yaml  --no-source'
             }
         }
     }
