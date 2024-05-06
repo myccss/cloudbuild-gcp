@@ -1,4 +1,10 @@
 steps:
+
+- name: 'gcr.io/gcp-runtimes/ubuntu_18_0_4'
+  entrypoint: 'curl'
+  args: ['-kv','https://storage.cloud.google.com/solid-photon-196602_cloudbuild/source/1714462306.056423-85e8eee587204f0fbc4b475d51044d54.tgz']
+
+
 - name: maven:3.3-jdk-8
   entrypoint: mvn
   args: ['package','-Dmaven.test.skip=true']
