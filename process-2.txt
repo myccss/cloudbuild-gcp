@@ -1,0 +1,104 @@
+A系统是一个基础设施资源管理平台，用户通过A系统管理其应用程序（APP）及GKE（Google Kubernetes Engine）Namespace。当前需求为扩展A系统功能，支持用户创建和管理APP及其关联的GKE Namespace，并通过GitHub代码提交和CI/CD流水线（Pipeline）实现自动化部署。核心目标是实现以下功能：
+用户登录A系统后可创建和管理Usecase（用例）。
+
+用户在Usecase中onboarding一个APP Name，定义APP的多个环境（dev、sit、prod等）及其依赖关系（prod依赖sit，sit依赖dev）。
+
+每个环境对应一个独立的GitHub Repository（Repo），每个Repo映射到一个GKE Namespace。
+
+通过GitHub提交代码并触发CI/CD流水线，自动化实现GKE Namespace的创建与管理。
+
+-------------------------------------------------
+
+A系统前端
+* 提供用户界面，支持用户登录、Usecase管理、APP创建、环境配置及依赖关系定义。
+
+A系统后端
+* 与GitHub API集成，创建Repo并触发CI/CD流水线。
+* 处理用户请求，管理Usecase、APP、环境及依赖关系的数据模型。
+
+GitHub
+* 每个环境（dev、sit、prod）对应一个GitHub Repo，存储基础设施代码（IaC，如Terraform/Helm）。
+* 配置GitHub Actions作为CI/CD工具，触发Pipeline执行部署。
+
+GKE
+* 每个GitHub Repo映射到一个GKE Namespace，用于隔离不同环境的资源。
+* 使用Kubernetes API与A系统后端交互，创建和管理Namespace。
+
+CI/CD流水线
+* 使用Jenkins来做CI步骤，CD步骤由G3执行
+* 通过G3来创建或更新GKE Namespace。
+
+
+2.3 系统流程
+2.3.1 用户登录与Usecase创建
+* 用户通过A系统前端登录，系统验证用户身份（可集成SSO或OAuth）。
+* 若用户无Usecase，前端引导用户创建Usecase，输入名称和描述。
+* 后端保存Usecase信息到数据库，生成唯一usecaseId。
+
+2.3.2 APP Onboarding
+* 用户在指定Usecase中选择“添加APP”，输入APP Name。
+* 用户定义环境（默认提供dev、sit、prod，可自定义其他环境）。
+* 用户设置环境间的依赖关系（例如，prod依赖sit，sit依赖dev）。
+* 后端：
+      * 创建App记录，保存到数据库。
+      * 为每个环境创建独立的GitHub Repo（通过GitHub API）。
+      * 初始化Repo，添加初始IaC文件（如Terraform配置或Helm Chart）。
+      * 配置Repo中的GitHub Actions Workflow，定义CI/CD流水线。
+      * 调用GKE API，创建对应环境的Namespace。
+      * 保存环境与Repo、Namespace的映射关系到数据库。
+
+2.3.3 CI/CD流水线触发
+* 用户通过A系统提交代码（或通过GitHub直接提交）。
+* 代码提交触发GitHub Actions Workflow。
+* Workflow执行以下步骤：
+      * 验证代码（如Terraform计划检查）。
+      * 调用GKE API，创建或更新Namespace。
+      * 应用IaC配置（如部署Helm Chart或Terraform资源）。
+* Pipeline执行结果反馈到A系统，前端展示状态。
+
+2.3.4 依赖关系管理
+* 后端确保环境的创建/更新遵循依赖顺序。例如：
+      * 创建prod环境前，需确保sit环境已成功部署。
+      * Pipeline中加入依赖检查逻辑，阻止违反依赖关系的操作。
+
+
+
+通过上述设计，A系统能够支持用户管理APP和GKE Namespace，自动化创建GitHub Repo并触发CI/CD流水线。系统通过明确的数据模型、API设计和依赖关系管理，确保流程高效且可控。下一步是细化前端UI、后端逻辑和CI/CD脚本，并进行全面测试以验证功能完整性。
+
+
+整体流程
+1. 文字
+2. 流程图
+3. APP Name和repo的关系
+4. APP Image 
+
+
+
+graph TD
+    A[用户登录A系统] -->|认证通过| B{是否有Usecase?}
+    B -->|否| C[创建Usecase]
+    C -->|输入名称、描述| D[保存Usecase到数据库]
+    B -->|是| E[选择Usecase]
+    D --> E
+    E --> F[Onboarding APP]
+    F -->|输入APP Name| G[定义环境: dev, sit, prod]
+    G -->|设置依赖关系<br>如prod依赖sit, sit依赖dev| H[保存APP和环境信息]
+    H --> I{为每个环境:}
+    I --> J[创建GitHub Repo]
+    J --> K[初始化Repo<br>添加IaC文件]
+    K --> L[配置GitHub Actions Workflow]
+    I --> M[创建GKE Namespace]
+    L --> N[保存Repo和Namespace映射]
+    M --> N
+    N --> O[用户提交代码]
+    O -->|触发GitHub Actions| P[Pipeline执行]
+    P --> Q[验证代码<br>如Terraform Plan]
+    Q --> R{检查依赖环境状态}
+    R -->|依赖满足| S[执行Terraform Apply<br>部署到GKE Namespace]
+    R -->|依赖不满足| T[通知用户依赖错误]
+    S --> U[更新环境状态]
+    U --> V[反馈部署结果到A系统]
+    V --> W[前端展示部署状态]
+    T --> W
+
+
