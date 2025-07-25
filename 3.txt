@@ -5,65 +5,66 @@ pipeline {
         stage('Export Credentials') {
             steps {
                 script {
-                    // 假设这是你的credentials ID列表
-                    def credentialIds = ['cred-id-1', 'cred-id-2', 'cred-id-3', 'cred-id-4', 'cred-id-5']
+                    // 定义不同类型的凭据ID列表
+                    def secretTextIds = ['secret-text-1', 'secret-text-2'] // Secret Text ID列表
+                    def usernamePasswordIds = ['user-pass-1', 'user-pass-2'] // Username with Password ID列表
+                    def secretFileIds = ['secret-file-1', 'secret-file-2'] // Secret File ID列表
+                    def sshKeyIds = ['ssh-key-1', 'ssh-key-2'] // SSH Username with Private Key ID列表
+                    def githubAppIds = ['github-app-1', 'github-app-2'] // GitHub App ID列表
 
                     // 用于存储JSON格式的凭据
                     def jsonCredentials = []
 
-                    // 获取Jenkins凭据存储
-                    def credentialsStore = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
-
-                    // 遍历每个credential ID
-                    credentialIds.each { credId ->
-                        def credential = credentialsStore.getCredentials(lookupCredentialsId(credId))
-
-                        if (credential == null) {
-                            echo "Credential with ID ${credId} not found!"
-                            return
-                        }
-
-                        // 根据凭据类型处理
-                        if (credential instanceof com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl) {
-                            // 处理 Username with Password
-                            def credData = [
-                                id: credId,
-                                type: 'UsernameWithPassword',
-                                username: credential.username,
-                                password: credential.password.getPlainText()
-                            ]
-                            jsonCredentials << credData
-                            echo "Processed Username with Password credential: ${credId}"
-
-                        } else if (credential instanceof com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials) {
-                            // 处理 Secret Text
+                    // 处理 Secret Text
+                    secretTextIds.each { credId ->
+                        withCredentials([string(credentialsId: credId, variable: 'SECRET')]) {
                             def credData = [
                                 id: credId,
                                 type: 'SecretText',
-                                secret: credential.secret.getPlainText()
+                                secret: SECRET
                             ]
                             jsonCredentials << credData
                             echo "Processed Secret Text credential: ${credId}"
-
-                        } else if (credential instanceof com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey) {
-                            // 处理 SSH Username with Private Key
-                            def fileName = "${credId}_private_key"
-                            writeFile file: fileName, text: credential.privateKey
-                            echo "Exported SSH Private Key to file: ${fileName}"
-
-                        } else if (credential instanceof org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl) {
-                            // 处理 Secret File
-                            def fileName = "${credId}_secret_file"
-                            writeFile file: fileName, text: credential.content.text
-                            echo "Exported Secret File to: ${fileName}"
-
-                        } else if (credential instanceof com.github.jenkinsci.plugins.githubapp.GitHubAppCredentials) {
-                            // 处理 GitHub App（仅导出基本信息，具体实现可能需要根据插件API调整）
-                            echo "GitHub App credential found: ${credId}. Exporting not supported in this script."
-                            // GitHub App凭据通常需要特殊处理，可能需要API调用，暂不导出
-                        } else {
-                            echo "Unsupported credential type for ID: ${credId}"
                         }
+                    }
+
+                    // 处理 Username with Password
+                    usernamePasswordIds.each { credId ->
+                        withCredentials([usernamePassword(credentialsId: credId, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                            def credData = [
+                                id: credId,
+                                type: 'UsernameWithPassword',
+                                username: USER,
+                                password: PASS
+                            ]
+                            jsonCredentials << credData
+                            echo "Processed Username with Password credential: ${credId}"
+                        }
+                    }
+
+                    // 处理 Secret File
+                    secretFileIds.each { credId ->
+                        withCredentials([file(credentialsId: credId, variable: 'FILE')]) {
+                            def fileContent = readFile(file: FILE)
+                            def fileName = "${credId}_secret_file"
+                            writeFile file: fileName, text: fileContent
+                            echo "Exported Secret File to: ${fileName}"
+                        }
+                    }
+
+                    // 处理 SSH Username with Private Key
+                    sshKeyIds.each { credId ->
+                        withCredentials([sshUserPrivateKey(credentialsId: credId, keyFileVariable: 'KEY', usernameVariable: 'USER')]) {
+                            def keyContent = readFile(file: KEY)
+                            def fileName = "${credId}_private_key"
+                            writeFile file: fileName, text: keyContent
+                            echo "Exported SSH Private Key to: ${fileName}"
+                        }
+                    }
+
+                    // 处理 GitHub App
+                    githubAppIds.each { credId ->
+                        echo "GitHub App credential: ${credId}. Exporting not supported in this script."
                     }
 
                     // 将Secret Text和Username with Password的凭据写入JSON文件
@@ -71,19 +72,11 @@ pipeline {
                         def jsonOutput = groovy.json.JsonOutput.toJson(jsonCredentials)
                         writeFile file: 'credentials.json', text: groovy.json.JsonOutput.prettyPrint(jsonOutput)
                         echo "Exported JSON credentials to: credentials.json"
+                    } else {
+                        echo "No Secret Text or Username with Password credentials to export as JSON."
                     }
                 }
             }
         }
     }
-}
-
-// 辅助方法：查找凭据ID
-def lookupCredentialsId(String credId) {
-    return com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
-        com.cloudbees.plugins.credentials.Credentials.class,
-        Jenkins.instance,
-        null,
-        null
-    ).find { it.id == credId }
 }
