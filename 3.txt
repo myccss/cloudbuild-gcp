@@ -1,82 +1,83 @@
-pipeline {
-    agent any
-
-    stages {
-        stage('Export Credentials') {
-            steps {
-                script {
-                    // 定义不同类型的凭据ID列表
-                    def secretTextIds = ['secret-text-1', 'secret-text-2'] // Secret Text ID列表
-                    def usernamePasswordIds = ['user-pass-1', 'user-pass-2'] // Username with Password ID列表
-                    def secretFileIds = ['secret-file-1', 'secret-file-2'] // Secret File ID列表
-                    def sshKeyIds = ['ssh-key-1', 'ssh-key-2'] // SSH Username with Private Key ID列表
-                    def githubAppIds = ['github-app-1', 'github-app-2'] // GitHub App ID列表
-
-                    // 用于存储JSON格式的凭据
-                    def jsonCredentials = []
-
-                    // 处理 Secret Text
-                    secretTextIds.each { credId ->
-                        withCredentials([string(credentialsId: credId, variable: 'SECRET')]) {
-                            def credData = [
-                                id: credId,
-                                type: 'SecretText',
-                                secret: SECRET
-                            ]
-                            jsonCredentials << credData
-                            echo "Processed Secret Text credential: ${credId}"
-                        }
-                    }
-
-                    // 处理 Username with Password
-                    usernamePasswordIds.each { credId ->
-                        withCredentials([usernamePassword(credentialsId: credId, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                            def credData = [
-                                id: credId,
-                                type: 'UsernameWithPassword',
-                                username: USER,
-                                password: PASS
-                            ]
-                            jsonCredentials << credData
-                            echo "Processed Username with Password credential: ${credId}"
-                        }
-                    }
-
-                    // 处理 Secret File
-                    secretFileIds.each { credId ->
-                        withCredentials([file(credentialsId: credId, variable: 'FILE')]) {
-                            def fileContent = readFile(file: FILE)
-                            def fileName = "${credId}_secret_file"
-                            writeFile file: fileName, text: fileContent
-                            echo "Exported Secret File to: ${fileName}"
-                        }
-                    }
-
-                    // 处理 SSH Username with Private Key
-                    sshKeyIds.each { credId ->
-                        withCredentials([sshUserPrivateKey(credentialsId: credId, keyFileVariable: 'KEY', usernameVariable: 'USER')]) {
-                            def keyContent = readFile(file: KEY)
-                            def fileName = "${credId}_private_key"
-                            writeFile file: fileName, text: keyContent
-                            echo "Exported SSH Private Key to: ${fileName}"
-                        }
-                    }
-
-                    // 处理 GitHub App
-                    githubAppIds.each { credId ->
-                        echo "GitHub App credential: ${credId}. Exporting not supported in this script."
-                    }
-
-                    // 将Secret Text和Username with Password的凭据写入JSON文件
-                    if (!jsonCredentials.isEmpty()) {
-                        def jsonOutput = groovy.json.JsonOutput.toJson(jsonCredentials)
-                        writeFile file: 'credentials.json', text: groovy.json.JsonOutput.prettyPrint(jsonOutput)
-                        echo "Exported JSON credentials to: credentials.json"
-                    } else {
-                        echo "No Secret Text or Username with Password credentials to export as JSON."
-                    }
-                }
-            }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System A Task Execution Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
         }
-    }
-}
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px;
+            line-height: 1.6;
+            color: #333333;
+        }
+        .content p {
+            margin: 0 0 15px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .footer {
+            background-color: #f4f4f9;
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #666666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>System A Task Execution Notification</h1>
+        </div>
+        <div class="content">
+            <p>Dear User,</p>
+            <p>We are pleased to inform you that the task for System A has entered the execution phase.</p>
+            <p>Please provide the necessary credentials in the Jenkins Job to trigger the deployment process.</p>
+            <p>
+                <a href="[Jenkins_Job_URL]" class="button">Access Jenkins Job</a>
+            </p>
+            <p>If you have any questions, please feel free to contact our support team.</p>
+            <p>Thank you for your cooperation!</p>
+        </div>
+        <div class="footer">
+            <p>This email is sent automatically. Please do not reply directly. For assistance, contact [support@example.com].</p>
+            <p>&copy; 2025 Your Company Name. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
