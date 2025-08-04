@@ -1,69 +1,24 @@
-pipeline {
-    agent any
-    environment {
-        GITHUB_TOKEN = credentials('github-token') // Jenkins凭据ID
-        REPO_OWNER = 'your-org' // GitHub组织或用户名
-        REPO_NAME = 'your-repo' // 仓库名
-        ADMIN_USERS = 'admin1,admin2' // 管理员用户列表，逗号分隔
-    }
-    stages {
-        stage('Check User Permissions') {
-            steps {
-                script {
-                    // 获取触发用户
-                    def userId = getTriggerUser()
-                    echo "Trigger user: ${userId}"
-
-                    // 检查是否为管理员
-                    def adminList = env.ADMIN_USERS.split(',').collect { it.trim() }
-                    if (userId in adminList) {
-                        echo "User ${userId} is an admin, bypassing permission check."
-                    } else {
-                        // 检查GitHub仓库权限
-                        def hasPermission = checkGitHubRepoPermission(userId)
-                        if (!hasPermission) {
-                            error "User ${userId} does not have permission to trigger this pipeline."
-                        }
-                        echo "User ${userId} has permission to trigger the pipeline."
-                    }
-                }
-            }
-        }
-        stage('Build') {
-            steps {
-                echo 'Proceeding with build stage...'
-                // 你的构建逻辑
-            }
-        }
-    }
-}
-
-// 获取触发用户的函数
-def getTriggerUser() {
-    def userId
-    def cause = currentBuild.getBuildCauses()
-    if (cause.any { it._class == 'org.jenkinsci.plugins.github_branch_source.PullRequestGHEventCause' }) {
-        // PR触发，获取PR提交者
-        def prCause = cause.find { it._class == 'org.jenkinsci.plugins.github_branch_source.PullRequestGHEventCause' }
-        userId = prCause?.pullRequest?.user?.login
-        if (!userId) {
-            error "Unable to retrieve user from PR cause."
-        }
-    } else {
-        // 手动触发，获取Jenkins用户
-        def userCause = cause.find { it._class == 'hudson.model.Cause$UserIdCause' }
-        userId = userCause?.userId ?: 'anonymous'
-    }
-    return userId
-}
-
-// 检查GitHub仓库权限的函数
 def checkGitHubRepoPermission(String userId) {
     def token = env.GITHUB_TOKEN
     def repoOwner = env.REPO_OWNER
     def repoName = env.REPO_NAME
 
-    // 检查用户是否为直接协作者
+    // 检查组织Owner权限（优先）
+    def orgMembershipUrl = "https://api.github.com/orgs/${repoOwner}/memberships/${userId}"
+    def membershipResponse = httpRequest(
+        url: orgMembershipUrl,
+        authentication: 'github-token',
+        httpMode: 'GET',
+        customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
+    )
+    if (membershipResponse.status == 200) {
+        def membership = readJSON text: membershipResponse.content
+        if (membership.role == 'admin') {
+            return true // 组织Owner
+        }
+    }
+
+    // 检查直接协作者
     def collaboratorUrl = "https://api.github.com/repos/${repoOwner}/${repoName}/collaborators/${userId}"
     def collaboratorResponse = httpRequest(
         url: collaboratorUrl,
@@ -75,7 +30,7 @@ def checkGitHubRepoPermission(String userId) {
         return true // 用户是协作者
     }
 
-    // 检查用户是否通过团队拥有权限
+    // 检查团队权限（处理分页）
     def teamsUrl = "https://api.github.com/repos/${repoOwner}/${repoName}/teams"
     def teamsResponse = httpRequest(
         url: teamsUrl,
@@ -85,26 +40,35 @@ def checkGitHubRepoPermission(String userId) {
     )
     def teams = readJSON text: teamsResponse.content
     for (team in teams) {
-        def teamMembersUrl = "https://api.github.com/teams/${team.id}/members"
-        def membersResponse = httpRequest(
-            url: teamMembersUrl,
+        // 检查团队对仓库的权限
+        def teamPermissionUrl = "https://api.github.com/teams/${team.id}/repos/${repoOwner}/${repoName}"
+        def permissionResponse = httpRequest(
+            url: teamPermissionUrl,
             authentication: 'github-token',
             httpMode: 'GET',
             customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
         )
-        def members = readJSON text: membersResponse.content
-        if (members.any { it.login == userId }) {
-            // 检查团队对仓库的权限
-            def teamPermissionUrl = "https://api.github.com/teams/${team.id}/repos/${repoOwner}/${repoName}"
-            def permissionResponse = httpRequest(
-                url: teamPermissionUrl,
-                authentication: 'github-token',
-                httpMode: 'GET',
-                customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-            )
-            def permission = readJSON text: permissionResponse.content
-            if (permission.permissions?.push) { // 至少需要write权限
-                return true
+        def permission = readJSON text: permissionResponse.content
+        if (permission.permissions?.push) {
+            // 获取团队成员，处理分页
+            def page = 1
+            def perPage = 100 // 最大每页100条
+            while (true) {
+                def teamMembersUrl = "https://api.github.com/teams/${team.id}/members?per_page=${perPage}&page=${page}"
+                def membersResponse = httpRequest(
+                    url: teamMembersUrl,
+                    authentication: 'github-token',
+                    httpMode: 'GET',
+                    customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
+                )
+                def members = readJSON text: membersResponse.content
+                if (members.isEmpty()) {
+                    break // 没有更多成员，退出循环
+                }
+                if (members.any { it.login == userId }) {
+                    return true // 用户在团队中且团队有write权限
+                }
+                page++ // 获取下一页
             }
         }
     }
