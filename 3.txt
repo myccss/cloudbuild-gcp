@@ -1,76 +1,142 @@
-def checkGitHubRepoPermission(String userId) {
-    def token = env.GITHUB_TOKEN
-    def repoOwner = env.REPO_OWNER
-    def repoName = env.REPO_NAME
+### Jenkins Shared Library Pipeline Demo 脚本提纲（30 分钟，聚焦使用层面）
 
-    // 检查组织Owner权限（优先）
-    def orgMembershipUrl = "https://api.github.com/orgs/${repoOwner}/memberships/${userId}"
-    def membershipResponse = httpRequest(
-        url: orgMembershipUrl,
-        authentication: 'github-token',
-        httpMode: 'GET',
-        customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-    )
-    if (membershipResponse.status == 200) {
-        def membership = readJSON text: membershipResponse.content
-        if (membership.role == 'admin') {
-            return true // 组织Owner
-        }
-    }
+为 DevOps 工程师设计的 30 分钟 demo，聚焦 Jenkins Shared Library 的**使用层面**，不展示底层代码实现。目标是通过实际操作展示 Shared Library 的简洁性、复用性和新功能（Slack 通知），让用户理解如何在 pipeline 中快速应用，并感受维护效率提升。基于 Jenkins 官方文档和使用场景，假设 Jenkins 环境已配置好 Shared Library（`my-shared-lib`），包含 `buildApp` 和 `deployApp` 函数（后者新增 Slack 通知）。
 
-    // 检查直接协作者
-    def collaboratorUrl = "https://api.github.com/repos/${repoOwner}/${repoName}/collaborators/${userId}"
-    def collaboratorResponse = httpRequest(
-        url: collaboratorUrl,
-        authentication: 'github-token',
-        httpMode: 'GET',
-        customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-    )
-    if (collaboratorResponse.status == 204) {
-        return true // 用户是协作者
-    }
+#### 时间分配
+- **0-5 分钟**：背景介绍 + 目标
+- **5-20 分钟**：核心使用演示（配置 pipeline、运行对比、验证更新）
+- **20-25 分钟**：扩展场景 + 最佳实践
+- **25-30 分钟**：Q&A + 总结
 
-    // 检查团队权限（处理分页）
-    def teamsUrl = "https://api.github.com/repos/${repoOwner}/${repoName}/teams"
-    def teamsResponse = httpRequest(
-        url: teamsUrl,
-        authentication: 'github-token',
-        httpMode: 'GET',
-        customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-    )
-    def teams = readJSON text: teamsResponse.content
-    for (team in teams) {
-        // 检查团队对仓库的权限
-        def teamPermissionUrl = "https://api.github.com/teams/${team.id}/repos/${repoOwner}/${repoName}"
-        def permissionResponse = httpRequest(
-            url: teamPermissionUrl,
-            authentication: 'github-token',
-            httpMode: 'GET',
-            customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-        )
-        def permission = readJSON text: permissionResponse.content
-        if (permission.permissions?.push) {
-            // 获取团队成员，处理分页
-            def page = 1
-            def perPage = 100 // 最大每页100条
-            while (true) {
-                def teamMembersUrl = "https://api.github.com/teams/${team.id}/members?per_page=${perPage}&page=${page}"
-                def membersResponse = httpRequest(
-                    url: teamMembersUrl,
-                    authentication: 'github-token',
-                    httpMode: 'GET',
-                    customHeaders: [[name: 'Accept', value: 'application/vnd.github.v3+json']]
-                )
-                def members = readJSON text: membersResponse.content
-                if (members.isEmpty()) {
-                    break // 没有更多成员，退出循环
-                }
-                if (members.any { it.login == userId }) {
-                    return true // 用户在团队中且团队有write权限
-                }
-                page++ // 获取下一页
+#### 准备工作（demo 前）
+1. **Jenkins 环境**：确保 Global Pipeline Library 配置好（`my-shared-lib@main`，GitHub repo），包含 `buildApp`（Maven 构建）和 `deployApp`（部署 + Slack 通知）。安装 Pipeline、Git、Slack Notification 插件。
+2. **测试 Repo**：GitHub repo（`demo-app`）包含简单 Maven 项目和两个 Jenkinsfile：
+   - `Jenkinsfile.old`：无 Library，冗长代码。
+   - `Jenkinsfile`：用 Library，简洁。
+3. **测试 Job**：两个 pipeline Job（“Old-Pipeline”和“New-Pipeline”），分别指向上述 Jenkinsfile。
+4. **Slack 通道**：配置好 Slack 通知（模拟收到部署消息）。
+
+---
+
+#### Demo 主题与步骤
+
+##### **阶段 1: 背景介绍 + 目标（0-5 分钟）**
+- **主题 1: 为什么用 Shared Library？**（3 分钟）  
+  - 痛点：传统 pipeline 重复写构建、部署代码，改一处得改 N 处，费时易错。  
+  - Shared Library 价值：统一逻辑，调用简单函数（如 `buildApp()`），新功能（如 Slack 通知）无需改 pipeline。  
+  - 示例场景：Maven 项目需构建 + 部署到 prod，过去 50 行代码，现在 10 行。  
+  - 最新更新：部署后自动 Slack 通知团队，状态一目了然。  
+  话术：“假设 10 个项目都要部署，改一次 Library，全局生效，省下 90% 维护时间。”
+
+- **主题 2: demo 目标**（2 分钟）  
+  - 展示如何在 pipeline 中调用 Library 函数（`buildApp`, `deployApp`）。  
+  - 对比无 Library vs 有 Library 的 pipeline（代码量、执行效果）。  
+  - 验证更新：运行 pipeline，查看 Slack 通知。  
+  - 互动：问 “你们 pipeline 有没有重复代码？想简化哪些步骤？” 记下答案，关联 demo。
+
+##### **阶段 2: 核心使用演示（5-20 分钟）**
+- **主题 3: 创建简洁 Pipeline（5-10 分钟）**  
+  - **操作**（Jenkins UI，3 分钟）：  
+    创建 Job “New-Pipeline” (Pipeline from SCM, Git: `demo-app`, Jenkinsfile: `Jenkinsfile`)。  
+    展示 Jenkinsfile（简洁版）：  
+    ```groovy
+    @Library('my-shared-lib') _
+    pipeline {
+        agent any
+        stages {
+            stage('Build') {
+                steps { script { buildApp() } }  // 构建，存档 artifacts
+            }
+            stage('Deploy') {
+                steps { script { deployApp('prod') } }  // 部署 + Slack
             }
         }
     }
-    return false
-}
+    ```  
+    解释：“`@Library` 加载共享库，`buildApp` 和 `deployApp` 像内置函数一样调用，参数化支持 prod/dev 环境。”  
+
+  - **运行 & 验证**（2 分钟）：  
+    运行 Job，展示 Blue Ocean 视图（stages 清晰）。  
+    打开 Slack，显示通知：“Deployment to prod successful! Build: #123”。  
+    话术：“看，代码 10 行搞定构建 + 部署 + 通知，零重复逻辑。”
+
+- **主题 4: 对比传统 Pipeline（10-15 分钟）**  
+  - **操作**（3 分钟）：  
+    切换到 Job “Old-Pipeline”（用 `Jenkinsfile.old`）：  
+    ```groovy
+    pipeline {
+        agent any
+        stages {
+            stage('Build') {
+                steps {
+                    echo "Building..."
+                    sh "mvn clean package -DskipTests"
+                    archiveArtifacts 'target/*.jar'
+                }
+            }
+            stage('Deploy') {
+                steps {
+                    sh "scp target/*.jar user@prod-server:/app/"
+                    sh "ssh user@prod-server ./deploy.sh"
+                    // 无 Slack 通知
+                }
+            }
+        }
+    }
+    ```  
+    运行，展示 console 输出（成功，但冗长）。  
+    对比：“50 行 vs 10 行，改 Slack 通知得手动加到每个 Job。”
+
+  - **模拟更新**（2 分钟）：  
+    说明：“假设我们更新 Library，加了部署时间戳。”  
+    运行 “New-Pipeline” 再次，console 显示新时间戳（无需改 Jenkinsfile）。  
+    “传统方式得改所有 Job，Library 一次更新全搞定。”
+
+- **主题 5: 查看函数文档（15-20 分钟）**  
+  - 导航到 `<jenkins-url>/pipeline-syntax/globals`，展示 `buildApp` 和 `deployApp` 的帮助文档。  
+  - 解释：“Library 自带文档，列出函数用法和参数（如 `deployApp(env)`），用户自助查阅。”  
+  - 话术：“新手也能快速上手，无需问 DevOps 怎么用。”
+
+##### **阶段 3: 扩展场景 + 最佳实践（20-25 分钟）**
+- **主题 6: 扩展使用场景**（3 分钟）  
+  - **多环境支持**：修改 `deployApp('dev')`，运行，展示 Slack 通知变 “dev”。  
+  - **条件加载**：介绍 `@Library('my-shared-lib@feature-branch')` 切换版本，测试新功能。  
+  - **复杂 pipeline**：提支持多阶段（如 lint、test、deploy），Library 可封装任意逻辑。  
+  - 举例：“前端项目用 `buildNodeApp`，Python 项目用 `buildPythonApp`，一个 Library 全覆盖。”
+
+- **主题 7: 使用最佳实践**（2 分钟）  
+  - **命名清晰**：函数名直观（如 `buildApp`），参数简单。  
+  - **版本控制**：用 Git 分支管理 Library（main 稳定，feature 测试）。  
+  - **错误处理**：Library 函数自带 try-catch，console 报错清晰。  
+  - **权限管理**：限制 Library 访问（Jenkins credentials 或 repo 权限）。  
+  - 话术：“这些实践让 Library 既灵活又安全。”
+
+##### **阶段 4: Q&A + 总结（25-30 分钟）**
+- **主题 8: 总结价值**（2 分钟）  
+  - **简洁**：pipeline 代码量减 80%，专注业务逻辑。  
+  - **统一**：跨团队共享标准流程（如 Slack 通知）。  
+  - **维护**：Library 更新一次，N 个 pipeline 自动同步。  
+  - 话术：“今天看到 10 行代码搞定复杂 pipeline，Slack 通知零成本集成。”
+
+- **主题 9: Q&A**（3 分钟）  
+  - 常见问题：  
+    - “怎么调试错误？” → “Console 显示 Library 函数名和行号。”  
+    - “支持私有 repo？” → “用 Jenkins credentials 配置 Git SSH。”  
+    - “怎么加新函数？” → “告诉 DevOps 需求，我们更新 Library。”  
+  - 鼓励：“有问题随时 Slack 我，repo 地址稍后分享。”
+
+- **行动号召**（1 分钟）：  
+  “下周试试在你们项目用这个 Library，Jenkins 文档 [链接](https://www.jenkins.io/doc/book/pipeline/shared-libraries/) 有详细指南。我们的 repo 也开放，欢迎反馈！”
+
+---
+
+#### 关键主题总结
+1. **简化 pipeline 开发**：用函数调用替代冗长脚本。  
+2. **跨项目复用**：一个 Library 支持多语言、多环境。  
+3. **新功能集成**：如 Slack 通知，零改动生效。  
+4. **用户友好**：自动文档，降低学习曲线。  
+5. **维护效率**：Git 版本控制，更新无缝。  
+6. **扩展性**：支持复杂逻辑、多分支版本。  
+7. **最佳实践**：清晰命名、安全权限、错误处理。
+
+这个提纲聚焦使用体验，突出 Shared Library 的“开箱即用”和“省心”。如果需要调整 demo 场景（如特定语言或工具），告诉我！
