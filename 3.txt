@@ -1,67 +1,314 @@
-Below is the enhanced English version of the document, incorporating the requested sections: **Adjustment Plan**, **Resource List**, **Adjustment Steps**, **Validation Methods**, and **Notes**. The content is structured to be clear, professional, and suitable for inclusion in your documentation.
+我来帮你实现这个GitHub企业版扫描工具。以下是一个完整的Python脚本：
 
----
+```python
+import requests
+import json
+import base64
+import sys
+from typing import List, Dict, Optional
+import argparse
 
-**Adjusting MIG Instance Count to Support Rolling Upgrades and Adding Share VPC IP to Firewall Whitelist**
+class GitHubEnterpriseScanner:
+    def __init__(self, enterprise_url: str, token: str):
+        """
+        初始化GitHub企业版扫描器
+        
+        Args:
+            enterprise_url: GitHub企业版URL，如 https://github.yourcompany.com
+            token: 个人访问令牌
+        """
+        self.enterprise_url = enterprise_url.rstrip('/')
+        self.token = token
+        self.headers = {
+            'Authorization': f'token {token}',
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'GitHub-Scanner/1.0'
+        }
+        self.api_base = f'{self.enterprise_url}/api/v3'
+    
+    def _make_request(self, method: str, endpoint: str, params: dict = None) -> Optional[Dict]:
+        """发送HTTP请求"""
+        try:
+            url = f"{self.api_base}{endpoint}"
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=self.headers,
+                params=params,
+                timeout=30
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"请求失败 {endpoint}: {e}")
+            return None
+    
+    def get_repos_by_prefix(self, org: str, prefix: str = "制定的名称前台") -> List[Dict]:
+        """
+        获取指定组织下以特定前缀开头的仓库
+        
+        Args:
+            org: 组织名称
+            prefix: 仓库名前缀
+            
+        Returns:
+            符合条件的仓库列表
+        """
+        repos = []
+        page = 1
+        per_page = 100
+        
+        while True:
+            params = {
+                'page': page,
+                'per_page': per_page
+            }
+            
+            endpoint = f"/orgs/{org}/repos"
+            data = self._make_request('GET', endpoint, params)
+            
+            if not data or not isinstance(data, list):
+                break
+            
+            for repo in data:
+                if repo['name'].startswith(prefix):
+                    repos.append(repo)
+            
+            if len(data) < per_page:
+                break
+            page += 1
+        
+        print(f"找到 {len(repos)} 个以 '{prefix}' 开头的仓库")
+        return repos
+    
+    def get_file_content(self, repo: Dict, branch: str, file_path: str) -> Optional[str]:
+        """获取指定分支的文件内容"""
+        try:
+            # 先获取文件SHA
+            endpoint = f"/repos/{repo['full_name']}/contents/{file_path}"
+            params = {'ref': branch}
+            file_info = self._make_request('GET', endpoint, params)
+            
+            if not file_info or 'content' not in file_info:
+                return None
+            
+            # 解码base64内容
+            content = base64.b64decode(file_info['content']).decode('utf-8')
+            return content
+        except Exception as e:
+            print(f"获取文件 {file_path} 失败: {e}")
+            return None
+    
+    def check_jenkinsfile(self, repo: Dict, branch: str, target_string: str) -> bool:
+        """
+        检查Jenkinsfile是否包含指定字符串
+        
+        Args:
+            repo: 仓库信息
+            branch: 分支名称
+            target_string: 要检查的字符串
+            
+        Returns:
+            True表示包含字符串（报告则跳过），False表示不包含
+        """
+        jenkinsfile_content = self.get_file_content(repo, branch, 'Jenkinsfile')
+        
+        if jenkinsfile_content is None:
+            print(f"  仓库 {repo['name']} 分支 {branch} 未找到Jenkinsfile")
+            return False  # 未找到文件，不跳过
+        
+        contains_string = target_string in jenkinsfile_content
+        status = "包含" if contains_string else "不包含"
+        print(f"  Jenkinsfile {status} '{target_string}'")
+        
+        return contains_string
+    
+    def get_collaborators(self, repo: Dict) -> List[Dict]:
+        """获取仓库协作者"""
+        collaborators = []
+        page = 1
+        per_page = 100
+        
+        while True:
+            params = {'page': page, 'per_page': per_page}
+            endpoint = f"/repos/{repo['full_name']}/collaborators"
+            data = self._make_request('GET', endpoint, params)
+            
+            if not data or not isinstance(data, list):
+                break
+            
+            collaborators.extend(data)
+            
+            if len(data) < per_page:
+                break
+            page += 1
+        
+        return collaborators
+    
+    def get_teams_with_permission(self, org: str, repo: Dict) -> List[Dict]:
+        """获取有权限的团队"""
+        teams = []
+        page = 1
+        per_page = 100
+        
+        while True:
+            params = {'page': page, 'per_page': per_page}
+            endpoint = f"/orgs/{org}/teams"
+            org_teams = self._make_request('GET', endpoint, params)
+            
+            if not org_teams or not isinstance(org_teams, list):
+                break
+            
+            for team in org_teams:
+                # 检查团队是否有仓库权限
+                team_endpoint = f"/teams/{team['id']}/repos/{repo['full_name']}"
+                team_repo = self._make_request('GET', team_endpoint)
+                
+                if team_repo:
+                    team['permission'] = team_repo.get('permissions', {})
+                    teams.append(team)
+            
+            if len(org_teams) < per_page:
+                break
+            page += 1
+        
+        return teams
+    
+    def scan_repo(self, repo: Dict, org: str, target_string: str) -> Optional[Dict]:
+        """扫描单个仓库"""
+        branches = ['master', 'dev']
+        report_found = False
+        
+        print(f"\n扫描仓库: {repo['name']} ({repo['full_name']})")
+        
+        # 检查两个分支的Jenkinsfile
+        for branch in branches:
+            if branch in [b['name'] for b in repo.get('default_branch', '')]:  # 简化检查
+                if self.check_jenkinsfile(repo, branch, target_string):
+                    report_found = True
+                    print(f"  分支 {branch} 包含报告字符串，跳过仓库")
+                    break
+        
+        # 如果没有找到报告字符串，获取协作者和团队信息
+        if not report_found:
+            print("  获取协作者和团队信息...")
+            
+            collaborators = self.get_collaborators(repo)
+            teams = self.get_teams_with_permission(org, repo)
+            
+            result = {
+                'repo': repo['full_name'],
+                'collaborators': len(collaborators),
+                'collaborators_list': [c['login'] for c in collaborators],
+                'teams': len(teams),
+                'teams_list': [{'name': t['name'], 'permission': t.get('permission', {})} for t in teams]
+            }
+            
+            print(f"  协作者数量: {len(collaborators)}")
+            print(f"  团队数量: {len(teams)}")
+            
+            return result
+        
+        return None
+    
+    def scan_organization(self, org: str, prefix: str, target_string: str) -> List[Dict]:
+        """扫描整个组织"""
+        print(f"开始扫描组织: {org}")
+        print(f"仓库名前缀: {prefix}")
+        print(f"检查字符串: '{target_string}'")
+        print("-" * 80)
+        
+        repos = self.get_repos_by_prefix(org, prefix)
+        results = []
+        
+        for repo in repos:
+            result = self.scan_repo(repo, org, target_string)
+            if result:
+                results.append(result)
+        
+        print(f"\n扫描完成！共找到 {len(results)} 个需要关注的仓库")
+        return results
 
-In the current Google Cloud Platform (GCP) production environment, some Managed Instance Groups (MIGs) have insufficient instance counts to support rolling upgrades, leading to downtime during image refresh operations. To address this, we plan to adjust the MIG instance count to ensure sufficient instances are available for seamless rolling upgrades, minimizing or eliminating service interruptions. Additionally, new Share VPC IP addresses generated during this process must be added to the firewall whitelist to maintain network connectivity and security.
+def main():
+    parser = argparse.ArgumentParser(description='GitHub企业版Jenkinsfile扫描工具')
+    parser.add_argument('--enterprise-url', required=True, help='GitHub企业版URL')
+    parser.add_argument('--token', required=True, help='GitHub个人访问令牌')
+    parser.add_argument('--org', required=True, help='组织名称')
+    parser.add_argument('--prefix', default='制定的名称前台', help='仓库名前缀')
+    parser.add_argument('--target-string', required=True, help='Jenkinsfile中要检查的字符串')
+    parser.add_argument('--output', help='输出结果JSON文件路径')
+    
+    args = parser.parse_args()
+    
+    scanner = GitHubEnterpriseScanner(args.enterprise_url, args.token)
+    results = scanner.scan_organization(args.org, args.prefix, args.target_string)
+    
+    # 输出结果
+    if args.output:
+        with open(args.output, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"结果已保存到: {args.output}")
+    
+    # 打印汇总
+    print("\n" + "="*80)
+    print("扫描结果汇总:")
+    for result in results:
+        print(f"- {result['repo']}: {result['collaborators']} 协作者, {result['teams']} 团队")
 
-### Adjustment Plan
-The adjustment plan aims to increase the MIG instance count to support rolling upgrades and ensure new Share VPC IPs are properly integrated into the network configuration. The plan includes:
-- Assessing the current MIG configuration to determine the required instance count.
-- Scaling the MIG to meet rolling upgrade requirements without impacting service availability.
-- Identifying and adding new Share VPC IPs to the firewall whitelist.
-- Validating the adjustments to ensure no downtime and proper functionality.
+if __name__ == "__main__":
+    main()
+```
 
-### Resource List
-The following resources are required for the adjustment:
-- **GCP Project**: [Specify project ID, e.g., `my-production-project`].
-- **MIGs**: List of target MIGs [e.g., `mig-webapp-prod`, `mig-api-prod`].
-- **Load Balancer**: Associated load balancer [e.g., `prod-load-balancer`].
-- **Firewall Rules**: Existing firewall rules to be updated [e.g., `allow-http-https`].
-- **Network Configuration**: Share VPC details [e.g., `shared-vpc-prod`].
-- **Tools**: 
-  - GCP Console or `gcloud` CLI for MIG and firewall management.
-  - Monitoring tools [e.g., Google Cloud Monitoring, Logging].
-- **Personnel**: 
-  - Cloud engineering team to adjust MIGs.
-  - Network team to update firewall rules.
+## 使用方法
 
-### Adjustment Steps
-1. **Assess Current MIG Configuration**:
-   - Use `gcloud compute instance-groups managed describe [MIG_NAME]` to review the current instance count, autoscaling policies, and rolling update settings.
-   - Determine the minimum number of instances required to support rolling upgrades based on the maximum unavailable percentage (e.g., 10%) and replacement rate.
-2. **Update MIG Instance Count**:
-   - Adjust the MIG target size using `gcloud compute instance-groups managed set-target-size [MIG_NAME] --size [NEW_SIZE]` or via the GCP Console.
-   - Configure the rolling update policy to ensure gradual instance replacement (e.g., `maxSurge` and `maxUnavailable` settings).
-3. **Identify New Share VPC IPs**:
-   - Monitor the MIG scaling process to capture any new Share VPC IP addresses assigned to new instances.
-   - Document the new IPs for firewall updates.
-4. **Update Firewall Rules**:
-   - Add the new Share VPC IPs to the firewall whitelist using `gcloud compute firewall-rules update [RULE_NAME] --source-ranges=[NEW_IP_RANGE]` or via the GCP Console.
-   - Specify relevant ports (e.g., 80, 443) and protocols (e.g., TCP) in the firewall rule.
-5. **Document Changes**:
-   - Record the updated MIG configuration, new instance counts, and firewall rule changes in the project documentation.
+1. **安装依赖**：
+```bash
+pip install requests
+```
 
-### Validation Methods
-1. **Simulate Rolling Upgrade**:
-   - Trigger a test rolling update using `gcloud compute instance-groups managed rolling-action start-update [MIG_NAME] --version=[NEW_IMAGE]`.
-   - Monitor the update process to ensure no downtime occurs and all instances are replaced successfully.
-2. **Verify Service Availability**:
-   - Use load balancer health checks or external monitoring tools to confirm that the application remains accessible during the upgrade.
-3. **Check Network Connectivity**:
-   - Test connectivity to the new Share VPC IPs using tools like `curl` or `ping` from authorized networks.
-   - Verify that firewall rules allow traffic to the new IPs on the specified ports.
-4. **Monitor Metrics**:
-   - Use Google Cloud Monitoring to track CPU, memory, and request latency metrics to ensure the adjusted MIG meets performance requirements.
+2. **配置Token权限**：
+   - 创建Personal Access Token，需要以下权限：
+     - `repo` (完整仓库访问)
+     - `read:org` (组织读取)
+     - `read:team` (团队读取)
 
-### Notes
-- **Backup**: Before making changes, back up the current MIG configuration (`gcloud compute instance-groups managed export [MIG_NAME]`) and firewall rules to enable quick rollback if needed.
-- **Coordination**: Work closely with the network team to ensure timely updates to the firewall whitelist, preventing access issues due to unauthorized IPs.
-- **Monitoring**: Continuously monitor MIG health and load balancer performance during and after the adjustment to detect any anomalies.
-- **Testing Environment**: Perform the adjustment in a staging environment first, if available, to validate the process before applying it to production.
-- **Communication**: Notify relevant stakeholders (e.g., application teams, operations) of the planned changes and potential impacts.
+3. **运行脚本**：
+```bash
+python github_scanner.py \
+    --enterprise-url "https://github.yourcompany.com" \
+    --token "your_personal_access_token" \
+    --org "your-organization" \
+    --target-string "report" \
+    --prefix "frontend" \
+    --output "scan_results.json"
+```
 
----
+## 功能特点
 
-Let me know if you need further refinements, such as specific `gcloud` commands, example configurations, or additional details tailored to your environment!
+1. **企业版支持**：专门适配GitHub Enterprise Server
+2. **仓库筛选**：按组织和名称前缀筛选仓库
+3. **分支扫描**：检查master和dev分支的Jenkinsfile
+4. **字符串检测**：判断是否包含指定字符串
+5. **权限信息**：获取协作者和团队权限信息
+6. **分页处理**：支持大量仓库的分页获取
+7. **错误处理**：完善的异常处理和日志输出
+8. **JSON输出**：支持结果导出为JSON文件
+
+## 注意事项
+
+1. **Token安全**：不要将Token硬编码在脚本中，建议使用环境变量
+2. **速率限制**：GitHub有API速率限制，大组织扫描时注意控制频率
+3. **权限要求**：需要足够的组织和仓库读取权限
+4. **网络配置**：企业版可能需要配置代理或SSL证书
+
+## 扩展功能
+
+可以根据需要添加：
+- 更多分支支持
+- 自定义文件路径检查
+- 数据库存储结果
+- 定时扫描任务
+- 详细的权限分析报告
+- Web界面展示结果
+
+这个脚本提供了完整的解决方案，你可以根据具体需求进行调整和扩展。
