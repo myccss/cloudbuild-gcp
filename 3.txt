@@ -1,246 +1,207 @@
-# Jenkins Shared Library Pipeline Design Document Outline
+# modules/spanner-core/main.tf
 
-## Document Title
-Jenkins Shared Library Pipeline Design Document  
-**文档标题**  
-Jenkins 共享库 Pipeline 设计文档
+resource "google_spanner_instance" "this" {
+  project          = var.project_id
+  name             = var.instance_id
+  config           = var.config
+  display_name     = var.display_name
+  processing_units = var.processing_units
+  num_nodes        = var.node_count
+  labels           = var.labels
 
-## 1. Introduction
-1.1 Purpose of the Document  
-**引言**  
-1.1 文档目的  
-
-1.2 Scope  
-**1.2 适用范围**  
-
-1.3 Version Information  
-**1.3 版本信息**  
-
-1.4 Document Structure  
-**1.4 文档结构**  
-
-## 2. Jenkins Shared Library Principles
-2.1 Concept of Shared Library  
-**Jenkins Shared Library 原理**  
-2.1 Shared Library 概念  
-
-2.2 Working Mechanism  
-**2.2 工作机制**  
-
-2.3 Loading Methods (global vs. local)  
-**2.3 加载方式（全局 vs. 本地）**  
-
-2.4 Version Management  
-**2.4 版本管理**  
-
-2.5 Variable Scoping  
-**2.5 变量作用域**  
-
-## 3. Pipeline Fundamentals
-3.1 Declarative vs. Scripted Pipeline  
-**Pipeline 基础概念**  
-3.1 声明式 vs. 脚本式 Pipeline  
-
-3.2 Pipeline Syntax Structure  
-**3.2 Pipeline 语法结构**  
-
-3.3 Stages and Steps  
-**3.3 阶段与步骤**  
-
-3.4 Agents and Environments  
-**3.4 代理与环境**  
-
-## 4. Shared Library Architecture Design
-4.1 Directory Structure Standards  
-**Shared Library 架构设计**  
-4.1 目录结构规范  
-```
-├── vars/          # Global variables and functions / 全局变量和函数
-├── src/           # Groovy classes and utility classes / Groovy 类和工具类
-├── resources/     # Static resource files / 静态资源文件
-└── README.md      # Documentation / 文档说明
-```
-
-4.2 Core Module Division  
-**4.2 核心模块划分**  
-
-4.3 Naming Conventions  
-**4.3 命名规范**  
-
-4.4 Code Organization Principles  
-**4.4 代码组织原则**  
-
-## 5. Core Functional Modules
-5.1 Build Management  
-**核心功能模块**  
-5.1 构建管理  
-   - Code Checkout / 代码检出
-   - Build Execution / 构建执行  
-   - Build Result Handling / 构建结果处理  
-
-5.2 Test Management  
-**5.2 测试管理**  
-   - Unit Testing / 单元测试
-   - Integration Testing / 集成测试
-   - Test Report Generation / 测试报告生成  
-
-5.3 Deployment Management  
-**5.3 部署管理**  
-   - Environment Deployment / 环境部署
-   - Rolling Updates / 滚动更新
-   - Rollback Mechanism / 回滚机制  
-
-5.4 Notification and Alerting  
-**5.4 通知与告警**  
-
-## 6. Usage Guide
-6.1 Including in Jenkinsfile  
-**使用方法**  
-6.1 在 Jenkinsfile 中引入  
-```groovy
-@Library('your-shared-library') _
-pipeline {
-    // pipeline definition / pipeline 定义
-}
-```
-
-6.2 Common Step Calls  
-**6.2 常用步骤调用**  
-
-6.3 Parameter Configuration  
-**6.3 参数配置**  
-
-6.4 Custom Extensions  
-**6.4 自定义扩展**  
-
-## 7. Configuration and Parameters
-7.1 Global Configuration  
-**配置与参数**  
-7.1 全局配置  
-
-7.2 Environment Variables  
-**7.2 环境变量**  
-
-7.3 Credentials Management  
-**7.3 凭据管理**  
-
-7.4 Configuration Files  
-**7.4 配置文件**  
-
-## 8. Best Practices
-8.1 Code Reuse Principles  
-**最佳实践**  
-8.1 代码复用原则  
-
-8.2 Error Handling Strategies  
-**8.2 错误处理策略**  
-
-8.3 Logging Standards  
-**8.3 日志记录规范**  
-
-8.4 Performance Optimization  
-**8.4 性能优化**  
-
-8.5 Security Considerations  
-**8.5 安全考虑**  
-
-## 9. Important Notes and Precautions
-9.1 Version Compatibility  
-**注意事项**  
-9.1 版本兼容性  
-
-9.2 Resource Limitations  
-**9.2 资源限制**  
-
-9.3 Concurrent Execution  
-**9.3 并发执行**  
-
-9.4 Permission Management  
-**9.4 权限管理**  
-
-9.5 Dependency Management  
-**9.5 依赖管理**  
-
-## 10. Troubleshooting
-10.1 Common Issues  
-**故障排除**  
-10.1 常见问题  
-
-10.2 Debugging Techniques  
-**10.2 调试技巧**  
-
-10.3 Log Analysis  
-**10.3 日志分析**  
-
-10.4 Performance Issues  
-**10.4 性能问题**  
-
-## 11. Development and Maintenance Guide
-11.1 Development Workflow  
-**开发与维护指南**  
-11.1 开发流程  
-
-11.2 Code Review Standards  
-**11.2 代码审查规范**  
-
-11.3 Testing Strategy  
-**11.3 测试策略**  
-
-11.4 Release Process  
-**11.4 发布流程**  
-
-11.5 Version Upgrade  
-**11.5 版本升级**  
-
-## 12. API Reference
-12.1 Global Variables  
-**API 参考**  
-12.1 全局变量  
-
-12.2 Utility Class Methods  
-**12.2 工具类方法**  
-
-12.3 Step Definitions  
-**12.3 步骤定义**  
-
-12.4 Event Handling  
-**12.4 事件处理**  
-
-## 13. Appendices
-13.1 Glossary  
-**附录**  
-13.1 术语表  
-
-13.2 Reference Documents  
-**13.2 参考文档**  
-
-13.3 Change History  
-**13.3 变更历史**  
-
-13.4 Contact Information  
-**13.4 联系方式**  
-
-## Example Code Snippets
-**示例代码**  
-```groovy
-// vars/buildApp.groovy
-def call(Map config = [:]) {
-    // Build logic / 构建逻辑
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
-// Jenkinsfile usage example / Jenkinsfile 使用示例
-@Library('shared-library') _
-pipeline {
-    agent any
-    stages {
-        stage('Build') {
-            steps {
-                buildApp()
-            }
-        }
+resource "google_spanner_database" "this" {
+  for_each = { for db in var.databases : db.name => db }
+
+  project    = var.project_id
+  instance   = google_spanner_instance.this.name
+  name       = each.value.name
+  ddl        = try(each.value.ddl, [])
+  encryption_config {
+    kms_key_name = try(each.value.encryption_key, null)
+  }
+
+  depends_on = [google_spanner_instance.this]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+
+
+####
+# modules/spanner-core/variables.tf
+
+variable "project_id" {
+  description = "GCP 项目 ID"
+  type        = string
+
+  validation {
+    condition     = length(var.project_id) > 0
+    error_message = "project_id 不能为空"
+  }
+}
+
+variable "instance_id" {
+  description = "Spanner 实例 ID（小写字母、数字、连字符）"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.instance_id))
+    error_message = "instance_id 必须 6-30 字符，以小写字母开头，仅含小写字母、数字、连字符"
+  }
+}
+
+variable "config" {
+  description = "Spanner 实例配置（如 regional-us-central1）"
+  type        = string
+}
+
+variable "display_name" {
+  description = "显示名称（可选）"
+  type        = string
+  default     = null
+}
+
+variable "processing_units" {
+  description = "处理单元数（100 的倍数，≥100）"
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.processing_units == null || (var.processing_units >= 100 && var.processing_units % 100 == 0)
+    error_message = "processing_units 必须为 100 的倍数，且 ≥100"
+  }
+}
+
+variable "node_count" {
+  description = "节点数（与 processing_units 互斥）"
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.node_count == null || var.node_count >= 1
+    error_message = "node_count 必须 ≥1"
+  }
+}
+
+# 互斥校验
+validation {
+  condition     = (var.processing_units == null) != (var.node_count == null)
+  error_message = "必须且只能设置 processing_units 或 node_count 其中一个"
+}
+
+variable "labels" {
+  description = "标签"
+  type        = map(string)
+  default     = {}
+}
+
+variable "databases" {
+  description = "数据库列表"
+  type = list(object({
+    name            = string
+    ddl             = optional(list(string), [])
+    encryption_key  = optional(string)
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for db in var.databases :
+      can(regex("^[a-z][a-z0-9_-]{0,61}[a-z0-9]$", db.name)) &&
+      length(db.name) >= 2 && length(db.name) <= 64
+    ])
+    error_message = "每个 database.name 必须 2-64 字符，小写字母开头，仅含小写字母、数字、下划线、连字符"
+  }
+}
+
+####
+
+# modules/spanner-core/outputs.tf
+
+output "instance_name" {
+  description = "Spanner 实例完整名称"
+  value       = google_spanner_instance.this.name
+}
+
+output "instance_self_link" {
+  description = "实例 self_link"
+  value       = google_spanner_instance.this.self_link
+}
+
+output "database_names" {
+  description = "创建的数据库名称列表"
+  value       = keys(google_spanner_database.this)
+}
+
+output "database_self_links" {
+  description = "每个数据库的 self_link"
+  value = {
+    for name, db in google_spanner_database.this :
+    name => db.self_link
+  }
+}
+
+output "processing_units" {
+  description = "实际使用的处理单元数"
+  value       = google_spanner_instance.this.processing_units
+}
+
+output "config" {
+  description = "实例配置区域"
+  value       = google_spanner_instance.this.config
+}
+
+###
+
+# modules/spanner-core/versions.tf
+
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.0, < 6.0"
     }
+  }
 }
-```
 
-This outline covers everything from basic principles to practical usage and maintenance. You can supplement it with specific technical details and implementation schemes based on your actual needs.  
-**这个大纲涵盖了从基础原理到实际使用、维护的完整内容，您可以根据实际需求补充具体的技术细节和实现方案。**
+###
+# Spanner Core Module
+
+创建单个 Spanner 实例 + 多个数据库。
+
+## 输入变量
+
+| 名称 | 描述 | 类型 | 必填 | 默认 |
+|------|------|------|------|------|
+| `project_id` | GCP 项目 ID | string | 是 | - |
+| `instance_id` | 实例 ID | string | 是 | - |
+| `config` | 区域配置 | string | 是 | - |
+| `processing_units` | 处理单元 | number | 否 | null |
+| `node_count` | 节点数（与上互斥） | number | 否 | null |
+| `databases` | 数据库列表 | list(object) | 否 | [] |
+
+## 示例
+
+```hcl
+module "spanner" {
+  source = "./spanner-core-v1.0.0.zip"
+
+  project_id         = "my-project"
+  instance_id        = "demo"
+  config             = "regional-us-central1"
+  processing_units   = 100
+  databases = [
+    { name = "users", ddl = ["CREATE TABLE Users (...) PRIMARY KEY (id)"] }
+  ]
+}
+
+##
+
+
