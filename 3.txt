@@ -205,3 +205,70 @@ module "spanner" {
 ##
 
 
+
+variable "project_id" {
+  description = "The GCP project ID"
+  type        = string
+}
+
+variable "instances_json" {
+  description = "JSON string defining multiple Spanner instances and their IAM roles"
+  type        = string
+}
+
+locals {
+  instances_data = jsondecode(var.instances_json)
+  # Assuming instances_json is a map where keys are instance names, and values are objects with config, display_name, processing_units, etc., and instance_iam_role
+  # Example JSON structure:
+  # {
+  #   "spanner-instance-1": {
+  #     "config": "regional-us-central1",
+  #     "display_name": "Spanner Instance 1",
+  #     "processing_units": 1000,
+  #     "instance_iam_role": {
+  #       "roles/spanner.databaseAdmin": ["group:gcp.project1.devops-team@abc.com"]
+  #     }
+  #   },
+  #   "spanner-instance-2": {
+  #     "config": "regional-europe-west1",
+  #     "display_name": "Spanner Instance 2",
+  #     "processing_units": 2000,
+  #     "instance_iam_role": {
+  #       "roles/spanner.viewer": ["user:example@abc.com"],
+  #       "roles/spanner.databaseUser": ["serviceAccount:sa@project.iam.gserviceaccount.com"]
+  #     }
+  #   }
+  # }
+
+  # Flatten IAM bindings for for_each
+  iam_bindings = flatten([
+    for instance_name, instance in local.instances_data : [
+      for role, members in instance.instance_iam_role : {
+        key      = "${instance_name}-${role}"
+        instance = instance_name
+        role     = role
+        members  = members
+      }
+    ]
+  ])
+}
+
+resource "google_spanner_instance" "spanner_instances" {
+  for_each = local.instances_data
+
+  name             = each.key
+  project          = var.project_id
+  config           = each.value.config
+  display_name     = each.value.display_name
+  processing_units = each.value.processing_units
+  # Add other optional parameters as needed, e.g., num_nodes, labels, etc.
+}
+
+resource "google_spanner_instance_iam_binding" "spanner_iam_bindings" {
+  for_each = { for binding in local.iam_bindings : binding.key => binding }
+
+  project   = var.project_id
+  instance  = google_spanner_instance.spanner_instances[each.value.instance].name
+  role      = each.value.role
+  members   = each.value.members
+}
