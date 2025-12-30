@@ -1,274 +1,159 @@
-# modules/spanner-core/main.tf
+以下是根据你描述的第二层 module 调用方式，搭配上次提供的 JSON 结构，所对应的**底层 module**（真正创建 spanner instance 和 IAM binding 的那个 module）的推荐写法：
 
-resource "google_spanner_instance" "this" {
-  project          = var.project_id
-  name             = var.instance_id
-  config           = var.config
-  display_name     = var.display_name
-  processing_units = var.processing_units
-  num_nodes        = var.node_count
-  labels           = var.labels
+### 底层 module 完整写法（假设路径为 `modules/spanner-instance`）
 
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "google_spanner_database" "this" {
-  for_each = { for db in var.databases : db.name => db }
-
-  project    = var.project_id
-  instance   = google_spanner_instance.this.name
-  name       = each.value.name
-  ddl        = try(each.value.ddl, [])
-  encryption_config {
-    kms_key_name = try(each.value.encryption_key, null)
-  }
-
-  depends_on = [google_spanner_instance.this]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-
-
-####
-# modules/spanner-core/variables.tf
+```hcl
+# modules/spanner-instance/variables.tf
 
 variable "project_id" {
-  description = "GCP 项目 ID"
+  description = "GCP project id"
   type        = string
-
-  validation {
-    condition     = length(var.project_id) > 0
-    error_message = "project_id 不能为空"
-  }
 }
 
-variable "instance_id" {
-  description = "Spanner 实例 ID（小写字母、数字、连字符）"
+variable "name" {
+  description = "Spanner instance name"
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.instance_id))
-    error_message = "instance_id 必须 6-30 字符，以小写字母开头，仅含小写字母、数字、连字符"
-  }
 }
 
 variable "config" {
-  description = "Spanner 实例配置（如 regional-us-central1）"
+  description = "Spanner instance config (regional-xxx or multi-region)"
   type        = string
 }
 
 variable "display_name" {
-  description = "显示名称（可选）"
+  description = "Display name of the instance"
   type        = string
   default     = null
 }
 
 variable "processing_units" {
-  description = "处理单元数（100 的倍数，≥100）"
+  description = "Number of processing units (100 ~ 100000)"
   type        = number
-  default     = null
-
-  validation {
-    condition     = var.processing_units == null || (var.processing_units >= 100 && var.processing_units % 100 == 0)
-    error_message = "processing_units 必须为 100 的倍数，且 ≥100"
-  }
+  default     = 1000
 }
 
-variable "node_count" {
-  description = "节点数（与 processing_units 互斥）"
-  type        = number
-  default     = null
-
-  validation {
-    condition     = var.node_count == null || var.node_count >= 1
-    error_message = "node_count 必须 ≥1"
-  }
-}
-
-# 互斥校验
-validation {
-  condition     = (var.processing_units == null) != (var.node_count == null)
-  error_message = "必须且只能设置 processing_units 或 node_count 其中一个"
+variable "instance_iam_roles" {
+  description = "Map of role -> list of members"
+  type        = map(list(string))
+  default     = {}
 }
 
 variable "labels" {
-  description = "标签"
+  description = "Optional labels"
   type        = map(string)
   default     = {}
 }
 
-variable "databases" {
-  description = "数据库列表"
-  type = list(object({
-    name            = string
-    ddl             = optional(list(string), [])
-    encryption_key  = optional(string)
-  }))
-  default = []
+# 可选：是否允许 terraform destroy 时强制删除（小心使用）
+variable "force_destroy" {
+  type    = bool
+  default = false
+}
+```
 
-  validation {
-    condition = alltrue([
-      for db in var.databases :
-      can(regex("^[a-z][a-z0-9_-]{0,61}[a-z0-9]$", db.name)) &&
-      length(db.name) >= 2 && length(db.name) <= 64
-    ])
-    error_message = "每个 database.name 必须 2-64 字符，小写字母开头，仅含小写字母、数字、下划线、连字符"
-  }
+```hcl
+# modules/spanner-instance/main.tf
+
+resource "google_spanner_instance" "this" {
+  project          = var.project_id
+  name             = var.name
+  config           = var.config
+  display_name     = coalesce(var.display_name, var.name)
+  processing_units = var.processing_units
+  labels           = var.labels
+  force_destroy    = var.force_destroy
+
+  # 可根据需要加入更多参数，例如 database encryption 等
 }
 
-####
+# IAM 绑定 - 使用 authoritative binding (google_spanner_instance_iam_binding)
+resource "google_spanner_instance_iam_binding" "roles" {
+  for_each = var.instance_iam_roles
 
-# modules/spanner-core/outputs.tf
+  project  = var.project_id
+  instance = google_spanner_instance.this.name
+  role     = each.key
+  members  = each.value
 
-output "instance_name" {
-  description = "Spanner 实例完整名称"
-  value       = google_spanner_instance.this.name
+  depends_on = [
+    google_spanner_instance.this
+  ]
+}
+```
+
+### 第二层 module 的典型调用方式（参考你提供的结构）
+
+```hcl
+# 第二层 module 範例（例如 environments/dev/spanner.tf）
+
+variable "spanner" {
+  type = any
+  # 或更嚴格一點：
+  # type = map(object({
+  #   config            = string
+  #   display_name      = optional(string)
+  #   processing_units  = optional(number, 1000)
+  #   instance_iam_roles = optional(map(list(string)), {})
+  #   labels            = optional(map(string), {})
+  # }))
 }
 
-output "instance_self_link" {
-  description = "实例 self_link"
-  value       = google_spanner_instance.this.self_link
+module "spanner_instances" {
+  source   = "../../modules/spanner-instance"
+  for_each = var.spanner
+
+  project_id         = "my-project-123"
+  name               = each.key
+  config             = each.value.config
+  display_name       = try(each.value.display_name, null)
+  processing_units   = try(each.value.processing_units, 1000)
+  instance_iam_roles = try(each.value.instance_iam_roles, {})
+  labels             = try(each.value.labels, {})
+  # force_destroy    = try(each.value.force_destroy, false)
 }
+```
 
-output "database_names" {
-  description = "创建的数据库名称列表"
-  value       = keys(google_spanner_database.this)
-}
+### 对应 JSON / var.spanner 结构示例
 
-output "database_self_links" {
-  description = "每个数据库的 self_link"
-  value = {
-    for name, db in google_spanner_database.this :
-    name => db.self_link
-  }
-}
-
-output "processing_units" {
-  description = "实际使用的处理单元数"
-  value       = google_spanner_instance.this.processing_units
-}
-
-output "config" {
-  description = "实例配置区域"
-  value       = google_spanner_instance.this.config
-}
-
-###
-
-# modules/spanner-core/versions.tf
-
-terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 5.0, < 6.0"
+```json
+{
+  "spanner": {
+    "spanner-instance-1": {
+      "config": "regional-us-central1",
+      "display_name": "Spanner Instance 1",
+      "processing_units": 1000,
+      "instance_iam_roles": {
+        "roles/spanner.databaseAdmin": [
+          "group:gcp.project1.devops-team@abc.com"
+        ]
+      }
+    },
+    "spanner-instance-2": {
+      "config": "regional-europe-west1",
+      "display_name": "Spanner Instance 2",
+      "processing_units": 2000,
+      "instance_iam_roles": {
+        "roles/spanner.viewer": [
+          "user:example@abc.com"
+        ],
+        "roles/spanner.databaseUser": [
+          "serviceAccount:sa@project.iam.gserviceaccount.com"
+        ]
+      }
     }
   }
 }
+```
 
-###
-# Spanner Core Module
+### 总结目前推荐的命名方式对比
 
-创建单个 Spanner 实例 + 多个数据库。
+| 字段名                  | 上一版（扁平map）       | 本版（第二层 for_each）     | 建议使用哪个？         |
+|-------------------------|--------------------------|------------------------------|------------------------|
+| instance_iam_role       | 常用                     | —                            | —                      |
+| instance_iam_roles      | —                        | 常用（复数更清晰）           | **推荐**（本版）       |
+| 第二层 for_each key     | 整个实例map             | 实例名称                     | **本版更清晰**         |
 
-## 输入变量
+**结论**：  
+如果你决定采用第二层 `for_each = var.spanner` 的方式（每个实例一个 module 调用），那么**底层 module 建议使用 `instance_iam_roles`（复数）** 这个变量名，这样语义更清晰，也与社区大多数 spanner/terraform 模块的习惯更接近。
 
-| 名称 | 描述 | 类型 | 必填 | 默认 |
-|------|------|------|------|------|
-| `project_id` | GCP 项目 ID | string | 是 | - |
-| `instance_id` | 实例 ID | string | 是 | - |
-| `config` | 区域配置 | string | 是 | - |
-| `processing_units` | 处理单元 | number | 否 | null |
-| `node_count` | 节点数（与上互斥） | number | 否 | null |
-| `databases` | 数据库列表 | list(object) | 否 | [] |
-
-## 示例
-
-```hcl
-module "spanner" {
-  source = "./spanner-core-v1.0.0.zip"
-
-  project_id         = "my-project"
-  instance_id        = "demo"
-  config             = "regional-us-central1"
-  processing_units   = 100
-  databases = [
-    { name = "users", ddl = ["CREATE TABLE Users (...) PRIMARY KEY (id)"] }
-  ]
-}
-
-##
-
-
-
-variable "project_id" {
-  description = "The GCP project ID"
-  type        = string
-}
-
-variable "instances_json" {
-  description = "JSON string defining multiple Spanner instances and their IAM roles"
-  type        = string
-}
-
-locals {
-  instances_data = jsondecode(var.instances_json)
-  # Assuming instances_json is a map where keys are instance names, and values are objects with config, display_name, processing_units, etc., and instance_iam_role
-  # Example JSON structure:
-  # {
-  #   "spanner-instance-1": {
-  #     "config": "regional-us-central1",
-  #     "display_name": "Spanner Instance 1",
-  #     "processing_units": 1000,
-  #     "instance_iam_role": {
-  #       "roles/spanner.databaseAdmin": ["group:gcp.project1.devops-team@abc.com"]
-  #     }
-  #   },
-  #   "spanner-instance-2": {
-  #     "config": "regional-europe-west1",
-  #     "display_name": "Spanner Instance 2",
-  #     "processing_units": 2000,
-  #     "instance_iam_role": {
-  #       "roles/spanner.viewer": ["user:example@abc.com"],
-  #       "roles/spanner.databaseUser": ["serviceAccount:sa@project.iam.gserviceaccount.com"]
-  #     }
-  #   }
-  # }
-
-  # Flatten IAM bindings for for_each
-  iam_bindings = flatten([
-    for instance_name, instance in local.instances_data : [
-      for role, members in instance.instance_iam_role : {
-        key      = "${instance_name}-${role}"
-        instance = instance_name
-        role     = role
-        members  = members
-      }
-    ]
-  ])
-}
-
-resource "google_spanner_instance" "spanner_instances" {
-  for_each = local.instances_data
-
-  name             = each.key
-  project          = var.project_id
-  config           = each.value.config
-  display_name     = each.value.display_name
-  processing_units = each.value.processing_units
-  # Add other optional parameters as needed, e.g., num_nodes, labels, etc.
-}
-
-resource "google_spanner_instance_iam_binding" "spanner_iam_bindings" {
-  for_each = { for binding in local.iam_bindings : binding.key => binding }
-
-  project   = var.project_id
-  instance  = google_spanner_instance.spanner_instances[each.value.instance].name
-  role      = each.value.role
-  members   = each.value.members
-}
+希望这个写法符合你的预期～
