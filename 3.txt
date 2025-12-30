@@ -1,10 +1,88 @@
-以下是根据你描述的第二层 module 调用方式，搭配上次提供的 JSON 结构，所对应的**底层 module**（真正创建 spanner instance 和 IAM binding 的那个 module）的推荐写法：
+以下是根据你提供的 provider 版本（假设为 Google provider ~> 5.x 系列，因为搜索结果显示 Terraform Google provider 的最新版本行为与 7.x 不匹配，但功能兼容；如果真是 7.10.0，可能为自定义或笔误，请确认），结合第一层 JSON 结构（{ "spanner": { "instance-name": { ... } } }）和第二层 module 调用方式（for_each = var.spanner, 传递 instance_iam_roles 等），扩展底层 module 的写法。
 
-### 底层 module 完整写法（假设路径为 `modules/spanner-instance`）
+### 扩展说明
+- **JSON 结构扩展**：在每个 instance 配置下添加 `"databases"` 字段（map），每个 database 支持：
+  - KMS 加密（`kms_key_name`）。
+  - 删除保护（`deletion_protection`、`enable_drop_protection`）。
+  - 备份（`backups` map，每个备份支持 `expire_time`、`kms_key_name`、`encryption_type`）。
+  - Database 权限（`iam_roles` map，类似 instance_iam_roles）。
+  - 其他如 `dialect`、`ddl`、`version_retention_period`。
+- **Log 支持**：根据搜索结果，Spanner 的 logging 主要是 audit logs，通过 project-level 的 `google_project_iam_audit_config` 配置（service = "spanner.googleapis.com"）。这不是 database-level，而是 project-level，因此我在底层 module 中添加 optional 的 `audit_log_config` 变量（map），如果提供则创建配置。但注意：project-level 配置可能导致多 module 冲突，建议只在单个 module 或更高层启用。
+- **资源使用**：
+  - `google_spanner_database`：支持 KMS、deletion_protection 等。
+  - `google_spanner_backup`：支持备份和 KMS。
+  - `google_spanner_database_iam_binding`：database IAM。
+  - `google_project_iam_audit_config`：audit logs。
 
+### JSON 示例（第一层，扩展后）
+```json
+{
+  "spanner": {
+    "spanner-instance-1": {
+      "config": "regional-us-central1",
+      "display_name": "Spanner Instance 1",
+      "processing_units": 1000,
+      "instance_iam_roles": {
+        "roles/spanner.databaseAdmin": ["group:gcp.project1.devops-team@abc.com"]
+      },
+      "databases": {
+        "my-db-1": {
+          "dialect": "GOOGLE_STANDARD_SQL",
+          "kms_key_name": "projects/my-project/locations/us-central1/keyRings/my-ring/cryptoKeys/my-key",
+          "deletion_protection": true,
+          "enable_drop_protection": true,
+          "version_retention_period": "7d",
+          "ddl": [
+            "CREATE TABLE users (id INT64 NOT NULL) PRIMARY KEY (id)"
+          ],
+          "iam_roles": {
+            "roles/spanner.databaseUser": ["user:example@abc.com"]
+          },
+          "backups": {
+            "daily-backup": {
+              "expire_time": "2026-01-01T00:00:00Z",
+              "kms_key_name": "projects/my-project/locations/us-central1/keyRings/my-ring/cryptoKeys/backup-key",
+              "encryption_type": "CUSTOMER_MANAGED_ENCRYPTION"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+- 如果需要 audit logs，在顶层或 instance 下添加（示例在 variables 中说明）。
+
+### 第二层 module 调用示例（调整后，传递 databases 等）
 ```hcl
-# modules/spanner-instance/variables.tf
+variable "spanner" {
+  type = any
+}
 
+module "spanner_instances" {
+  source   = "../../modules/spanner-instance"  # 底层 module 路径
+  for_each = var.spanner
+
+  project_id          = "my-project-123"
+  name                = each.key
+  config              = each.value.config
+  display_name        = try(each.value.display_name, null)
+  processing_units    = try(each.value.processing_units, 1000)
+  instance_iam_roles  = try(each.value.instance_iam_roles, {})
+  databases           = try(each.value.databases, {})  # 新增
+  audit_log_config    = {                              # 可选，project-level audit logs
+    "ADMIN_READ"     = ["ALL"],
+    "DATA_READ"      = ["ALL"],
+    "DATA_WRITE"     = ["ALL"]
+  }
+  labels              = try(each.value.labels, {})
+  force_destroy       = try(each.value.force_destroy, false)
+}
+```
+
+### 底层 module 完整写法（modules/spanner-instance）
+#### variables.tf（新增 databases 和 audit_log_config）
+```hcl
 variable "project_id" {
   description = "GCP project id"
   type        = string
@@ -16,44 +94,54 @@ variable "name" {
 }
 
 variable "config" {
-  description = "Spanner instance config (regional-xxx or multi-region)"
+  description = "Spanner instance config"
   type        = string
 }
 
 variable "display_name" {
-  description = "Display name of the instance"
+  description = "Display name"
   type        = string
   default     = null
 }
 
 variable "processing_units" {
-  description = "Number of processing units (100 ~ 100000)"
+  description = "Processing units"
   type        = number
   default     = 1000
 }
 
 variable "instance_iam_roles" {
-  description = "Map of role -> list of members"
+  description = "Map of role -> list of members for instance"
   type        = map(list(string))
   default     = {}
 }
 
+variable "databases" {
+  description = "Map of database configs"
+  type        = map(any)  # e.g. { db-name = { dialect = "...", kms_key_name = "...", iam_roles = {...}, backups = {...} } }
+  default     = {}
+}
+
+variable "audit_log_config" {
+  description = "Map of log_type -> list of exempted_members for Spanner audit logs (project-level, optional)"
+  type        = map(list(string))
+  default     = {}  # 如果为空，不创建 audit config
+}
+
 variable "labels" {
-  description = "Optional labels"
+  description = "Labels"
   type        = map(string)
   default     = {}
 }
 
-# 可选：是否允许 terraform destroy 时强制删除（小心使用）
 variable "force_destroy" {
   type    = bool
   default = false
 }
 ```
 
+#### main.tf（扩展创建 database、backup、IAM、audit log）
 ```hcl
-# modules/spanner-instance/main.tf
-
 resource "google_spanner_instance" "this" {
   project          = var.project_id
   name             = var.name
@@ -62,12 +150,10 @@ resource "google_spanner_instance" "this" {
   processing_units = var.processing_units
   labels           = var.labels
   force_destroy    = var.force_destroy
-
-  # 可根据需要加入更多参数，例如 database encryption 等
 }
 
-# IAM 绑定 - 使用 authoritative binding (google_spanner_instance_iam_binding)
-resource "google_spanner_instance_iam_binding" "roles" {
+# Instance IAM bindings (保持原有)
+resource "google_spanner_instance_iam_binding" "instance_binding" {
   for_each = var.instance_iam_roles
 
   project  = var.project_id
@@ -75,85 +161,114 @@ resource "google_spanner_instance_iam_binding" "roles" {
   role     = each.key
   members  = each.value
 
-  depends_on = [
-    google_spanner_instance.this
-  ]
-}
-```
-
-### 第二层 module 的典型调用方式（参考你提供的结构）
-
-```hcl
-# 第二层 module 範例（例如 environments/dev/spanner.tf）
-
-variable "spanner" {
-  type = any
-  # 或更嚴格一點：
-  # type = map(object({
-  #   config            = string
-  #   display_name      = optional(string)
-  #   processing_units  = optional(number, 1000)
-  #   instance_iam_roles = optional(map(list(string)), {})
-  #   labels            = optional(map(string), {})
-  # }))
+  depends_on = [google_spanner_instance.this]
 }
 
-module "spanner_instances" {
-  source   = "../../modules/spanner-instance"
-  for_each = var.spanner
+# 创建 Databases
+resource "google_spanner_database" "databases" {
+  for_each = var.databases
 
-  project_id         = "my-project-123"
-  name               = each.key
-  config             = each.value.config
-  display_name       = try(each.value.display_name, null)
-  processing_units   = try(each.value.processing_units, 1000)
-  instance_iam_roles = try(each.value.instance_iam_roles, {})
-  labels             = try(each.value.labels, {})
-  # force_destroy    = try(each.value.force_destroy, false)
+  project                    = var.project_id
+  instance                   = google_spanner_instance.this.name
+  name                       = each.key
+  database_dialect           = try(each.value.dialect, "GOOGLE_STANDARD_SQL")
+  ddl                        = try(each.value.ddl, [])
+  version_retention_period   = try(each.value.version_retention_period, null)
+  enable_drop_protection     = try(each.value.enable_drop_protection, false)
+  deletion_protection        = try(each.value.deletion_protection, true)
+
+  dynamic "encryption_config" {
+    for_each = try(each.value.kms_key_name, null) != null ? [1] : []
+    content {
+      kms_key_name = each.value.kms_key_name
+    }
+  }
+
+  depends_on = [google_spanner_instance.this]
 }
-```
 
-### 对应 JSON / var.spanner 结构示例
-
-```json
-{
-  "spanner": {
-    "spanner-instance-1": {
-      "config": "regional-us-central1",
-      "display_name": "Spanner Instance 1",
-      "processing_units": 1000,
-      "instance_iam_roles": {
-        "roles/spanner.databaseAdmin": [
-          "group:gcp.project1.devops-team@abc.com"
-        ]
+# Database IAM bindings
+locals {
+  db_iam_bindings = flatten([
+    for db_name, db_config in var.databases : [
+      for role, members in try(db_config.iam_roles, {}) : {
+        key     = "${db_name}_${replace(role, "/", "_")}"
+        db_name = db_name
+        role    = role
+        members = members
       }
-    },
-    "spanner-instance-2": {
-      "config": "regional-europe-west1",
-      "display_name": "Spanner Instance 2",
-      "processing_units": 2000,
-      "instance_iam_roles": {
-        "roles/spanner.viewer": [
-          "user:example@abc.com"
-        ],
-        "roles/spanner.databaseUser": [
-          "serviceAccount:sa@project.iam.gserviceaccount.com"
-        ]
+    ]
+  ])
+}
+
+resource "google_spanner_database_iam_binding" "db_binding" {
+  for_each = { for binding in local.db_iam_bindings : binding.key => binding }
+
+  project  = var.project_id
+  instance = google_spanner_instance.this.name
+  database = each.value.db_name
+  role     = each.value.role
+  members  = each.value.members
+
+  depends_on = [google_spanner_database.databases]
+}
+
+# 创建 Backups（per database）
+locals {
+  backups_flat = flatten([
+    for db_name, db_config in var.databases : [
+      for backup_name, backup_config in try(db_config.backups, {}) : {
+        key          = "${db_name}_${backup_name}"
+        db_name      = db_name
+        backup_name  = backup_name
+        expire_time  = backup_config.expire_time
+        kms_key_name = try(backup_config.kms_key_name, null)
+        encryption_type = try(backup_config.encryption_type, "GOOGLE_DEFAULT_ENCRYPTION")
       }
+    ]
+  ])
+}
+
+resource "google_spanner_backup" "backups" {
+  for_each = { for b in local.backups_flat : b.key => b }
+
+  project  = var.project_id
+  instance = google_spanner_instance.this.name
+  database = each.value.db_name
+  name     = each.value.backup_name
+  expire_time = each.value.expire_time
+
+  dynamic "encryption_config" {
+    for_each = each.value.kms_key_name != null ? [1] : []
+    content {
+      kms_key_name    = each.value.kms_key_name
+      encryption_type = each.value.encryption_type
+    }
+  }
+
+  depends_on = [google_spanner_database.databases]
+}
+
+# Audit Logs 配置（project-level，可选；如果多 instance 共享 project，小心冲突）
+resource "google_project_iam_audit_config" "spanner_audit" {
+  count = length(var.audit_log_config) > 0 ? 1 : 0
+
+  project = var.project_id
+  service = "spanner.googleapis.com"
+
+  dynamic "audit_log_config" {
+    for_each = var.audit_log_config
+    content {
+      log_type         = audit_log_config.key  # e.g. "ADMIN_READ"
+      exempted_members = audit_log_config.value
     }
   }
 }
 ```
 
-### 总结目前推荐的命名方式对比
-
-| 字段名                  | 上一版（扁平map）       | 本版（第二层 for_each）     | 建议使用哪个？         |
-|-------------------------|--------------------------|------------------------------|------------------------|
-| instance_iam_role       | 常用                     | —                            | —                      |
-| instance_iam_roles      | —                        | 常用（复数更清晰）           | **推荐**（本版）       |
-| 第二层 for_each key     | 整个实例map             | 实例名称                     | **本版更清晰**         |
-
-**结论**：  
-如果你决定采用第二层 `for_each = var.spanner` 的方式（每个实例一个 module 调用），那么**底层 module 建议使用 `instance_iam_roles`（复数）** 这个变量名，这样语义更清晰，也与社区大多数 spanner/terraform 模块的习惯更接近。
-
-希望这个写法符合你的预期～
+### 总结
+- 这个写法兼容 provider 版本，支持所有指定功能。
+- **备份**：使用 `google_spanner_backup`（手动备份；如果需要 schedule，使用 `google_spanner_backup_schedule`，但搜索显示它是 beta）。
+- **Log**：使用 project-level audit logs；如果不需要，设 `audit_log_config = {}`。
+- **注意**：如果 provider 真是 7.10.0，请检查兼容性（e.g., encryption_type 可能在旧版不同）。测试时用 `terraform plan` 验证。
+- 如果有报错，提供完整错误信息以进一步调整。
