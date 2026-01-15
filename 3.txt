@@ -1,18 +1,18 @@
 ```mermaid
-flowchart TD
+graph TD
     Start[Start]
-    CheckOnboarding{Steps 1 & 2 done? <br> (Onboarding use-case in Danaan <br> and Create namespace)}
+    CheckOnboarding{Steps 1 and 2 done? (Onboarding use-case in Danaan and Create namespace)}
     Step1[1. Onboarding use-case in Danaan]
     Step2[2. Create namespace in Danaan]
-    Step3[3. Onboarding container app in Danaan <br> and Adjust namespace env]
+    Step3[3. Onboarding container app in Danaan and Adjust namespace env]
     Step4[4. Ask support to create image repo]
     Step5[5. Submit code to image repo]
     Step6[6. Trigger build image Jenkins job]
     Step7[7. Trigger image Promote Jenkins Job]
-    Step8[8. Get GCR image address, <br> modify namespace repo YAML, <br> and submit code]
-    Step9[9. Submit namespace repo PR <br> and trigger CD Jenkins Job]
+    Step8[8. Get GCR image address, modify namespace repo YAML, and submit code]
+    Step9[9. Submit namespace repo PR and trigger CD Jenkins Job]
     CheckNextEnv{Has next environment?}
-    Promotion[Call image promotion Jenkins Job <br> to push image to next environment]
+    Promotion[Call image promotion Jenkins Job to push image to next environment]
     End[End]
 
     Start --> CheckOnboarding
