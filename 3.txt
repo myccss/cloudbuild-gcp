@@ -1,35 +1,178 @@
-```mermaid
-graph TD
-    Start[Start]
-    CheckOnboarding{Steps 1 and 2 done? (Onboarding use-case in Danaan and Create namespace)}
-    Step1[1. Onboarding use-case in Danaan]
-    Step2[2. Create namespace in Danaan]
-    Step3[3. Onboarding container app in Danaan and Adjust namespace env]
-    Step4[4. Ask support to create image repo]
-    Step5[5. Submit code to image repo]
-    Step6[6. Trigger build image Jenkins job]
-    Step7[7. Trigger image Promote Jenkins Job]
-    Step8[8. Get GCR image address, modify namespace repo YAML, and submit code]
-    Step9[9. Submit namespace repo PR and trigger CD Jenkins Job]
-    CheckNextEnv{Has next environment?}
-    Promotion[Call image promotion Jenkins Job to push image to next environment]
-    End[End]
 
-    Start --> CheckOnboarding
-    CheckOnboarding -- No --> Step1
-    Step1 --> Step2
-    Step2 --> Step3
-    CheckOnboarding -- Yes --> Step3
-    Step3 --> Step4
-    Step4 --> Step5
-    Step5 --> Step6
-    Step6 --> Step7
-    Step7 --> Step8
-    Step8 --> Step9
-    Step9 --> CheckCDSuccess{CD Jenkins Job successful?}
-    CheckCDSuccess -- No --> EndError[End with error]
-    CheckCDSuccess -- Yes --> CheckNextEnv
-    CheckNextEnv -- No --> End
-    CheckNextEnv -- Yes --> Promotion
-    Promotion --> Step8
-```
+root@iZj6c0qz8kzkd3ha1owlfoZ:~/deer-flow# docker exec -it 5218 bash
+root@5218c967d17d:/app# env
+PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684
+HOSTNAME=5218c967d17d
+PYTHON_VERSION=3.12.13
+DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
+DEER_FLOW_HOME=/app/backend/.deer-flow
+GEMINI_API_KEY=g312233
+PWD=/app
+DEER_FLOW_CONFIG_PATH=/app/backend/config.yaml
+HOME=/root
+LANG=C.UTF-8
+GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
+DEER_FLOW_HOST_SKILLS_PATH=/root/deer-flow/skills
+DEER_FLOW_HOST_BASE_DIR=/root/deer-flow/backend/.deer-flow
+TERM=xterm
+SHLVL=1
+DEER_FLOW_SANDBOX_HOST=host.docker.internal
+PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CI=true
+VLLM_API_KEY=1we1r32
+_=/usr/bin/env
+root@5218c967d17d:/app# df -h
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          99G   37G   58G  40% /
+tmpfs            64M     0   64M   0% /dev
+shm              64M     0   64M   0% /dev/shm
+/dev/vda3        99G   37G   58G  40% /root/.codex
+tmpfs           1.5G  1.5M  1.5G   1% /run/docker.sock
+tmpfs           7.4G     0  7.4G   0% /proc/acpi
+tmpfs           7.4G     0  7.4G   0% /proc/scsi
+tmpfs           7.4G     0  7.4G   0% /sys/firmware
+
+############
+
+root@iZj6c0qz8kzkd3ha1owlfoZ:~/deer-flow# docker ps
+CONTAINER ID   IMAGE                   COMMAND                  CREATED          STATUS                     PORTS                                                 NAMES
+5218c967d17d   deer-flow-langgraph     "sh -c 'cd /app/back…"   15 minutes ago   Up 15 minutes              2024/tcp, 8001/tcp                                    deer-flow-langgraph
+f1fb3f880881   deer-flow-gateway       "sh -c 'cd backend &…"   15 minutes ago   Up 15 minutes              2024/tcp, 8001/tcp                                    deer-flow-gateway
+a15cdc47bc2b   deer-flow-provisioner   "uvicorn app:app --h…"   15 minutes ago   Up 6 minutes (unhealthy)   8002/tcp                                              deer-flow-provisioner
+9435107c9b2a   deer-flow-frontend      "docker-entrypoint.s…"   15 minutes ago   Up 15 minutes              3000/tcp                                              deer-flow-frontend
+fea6c0375ac9   nginx:alpine            "/docker-entrypoint.…"   20 minutes ago   Up 20 minutes              80/tcp, 0.0.0.0:2026->2026/tcp, [::]:2026->2026/tcp   deer-flow-nginx
+root@iZj6c0qz8kzkd3ha1owlfoZ:~/deer-flow# docker exec -it f1fb  bash
+root@f1fb3f880881:/app# env
+PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684
+HOSTNAME=f1fb3f880881
+PYTHON_VERSION=3.12.13
+DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
+DEER_FLOW_HOME=/app/backend/.deer-flow
+GEMINI_API_KEY=g312233
+PWD=/app
+DEER_FLOW_CONFIG_PATH=/app/backend/config.yaml
+HOME=/root
+LANG=C.UTF-8
+GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
+DEER_FLOW_HOST_SKILLS_PATH=/root/deer-flow/skills
+DEER_FLOW_CHANNELS_LANGGRAPH_URL=http://langgraph:2024
+DEER_FLOW_HOST_BASE_DIR=/root/deer-flow/backend/.deer-flow
+DEER_FLOW_CHANNELS_GATEWAY_URL=http://gateway:8001
+TERM=xterm
+SHLVL=1
+DEER_FLOW_SANDBOX_HOST=host.docker.internal
+PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CI=true
+VLLM_API_KEY=1we1r32
+_=/usr/bin/env
+root@f1fb3f880881:/app# df -h
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          99G   37G   58G  40% /
+tmpfs            64M     0   64M   0% /dev
+shm              64M     0   64M   0% /dev/shm
+/dev/vda3        99G   37G   58G  40% /app/skills
+tmpfs           1.5G  1.5M  1.5G   1% /run/docker.sock
+tmpfs           7.4G     0  7.4G   0% /proc/acpi
+tmpfs           7.4G     0  7.4G   0% /proc/scsi
+tmpfs           7.4G     0  7.4G   0% /sys/firmware
+
+
+
+######
+KUBECONFIG_PATH=/root/.kube/config
+PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684
+HOSTNAME=a15cdc47bc2b
+PYTHON_VERSION=3.12.13
+GEMINI_API_KEY=g312233
+NODE_HOST=host.docker.internal
+PWD=/app
+K8S_NAMESPACE=deer-flow
+K8S_API_SERVER=https://host.docker.internal:26443
+THREADS_HOST_PATH=/root/deer-flow/backend/.deer-flow/threads
+HOME=/root
+LANG=C.UTF-8
+GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
+TERM=xterm
+SKILLS_HOST_PATH=/root/deer-flow/skills
+SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+SHLVL=1
+PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+VLLM_API_KEY=1we1r32
+_=/usr/bin/env
+root@a15cdc47bc2b:/app# df -h
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          99G   37G   58G  40% /
+tmpfs            64M     0   64M   0% /dev
+shm              64M     0   64M   0% /dev/shm
+/dev/vda3        99G   37G   58G  40% /etc/hosts
+tmpfs           7.4G     0  7.4G   0% /proc/acpi
+tmpfs           7.4G     0  7.4G   0% /proc/scsi
+tmpfs           7.4G     0  7.4G   0% /sys/firmware
+
+
+##########
+/app # env
+DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+BETTER_AUTH_SECRET=14e2b714a0d9280ccf337753708a45c6645cc8413e95daebafb4a2c1d90b1e7b
+NODE_VERSION=22.22.2
+HOSTNAME=9435107c9b2a
+YARN_VERSION=1.22.22
+SHLVL=1
+HOME=/root
+DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL=http://langgraph:2024
+TERM=xterm
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+VLLM_API_KEY=1we1r32
+PWD=/app
+GEMINI_API_KEY=g312233
+/app # df -h
+Filesystem                Size      Used Available Use% Mounted on
+overlay                  98.1G     36.7G     57.1G  39% /
+tmpfs                    64.0M         0     64.0M   0% /dev
+shm                      64.0M         0     64.0M   0% /dev/shm
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/resolv.conf
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/hostname
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/hosts
+tmpfs                     7.4G         0      7.4G   0% /proc/acpi
+tmpfs                    64.0M         0     64.0M   0% /proc/interrupts
+tmpfs                    64.0M         0     64.0M   0% /proc/kcore
+tmpfs                    64.0M         0     64.0M   0% /proc/keys
+tmpfs                    64.0M         0     64.0M   0% /proc/latency_stats
+tmpfs                     7.4G         0      7.4G   0% /proc/scsi
+tmpfs                    64.0M         0     64.0M   0% /proc/timer_list
+tmpfs                     7.4G         0      7.4G   0% /sys/firmware
+
+
+########
+/ # env
+HOSTNAME=fea6c0375ac9
+SHLVL=1
+HOME=/root
+PKG_RELEASE=1
+DYNPKG_RELEASE=1
+ACME_VERSION=0.3.1
+TERM=xterm
+NGINX_VERSION=1.29.8
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+LANGGRAPH_REWRITE=/
+LANGGRAPH_UPSTREAM=langgraph:2024
+NJS_VERSION=0.9.6
+NJS_RELEASE=1
+PWD=/
+/ # df -h
+Filesystem                Size      Used Available Use% Mounted on
+overlay                  98.1G     36.7G     57.1G  39% /
+tmpfs                    64.0M         0     64.0M   0% /dev
+shm                      64.0M         0     64.0M   0% /dev/shm
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/resolv.conf
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/hostname
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/hosts
+/dev/vda3                98.1G     36.7G     57.1G  39% /etc/nginx/nginx.conf.template
+tmpfs                     7.4G         0      7.4G   0% /proc/acpi
+tmpfs                    64.0M         0     64.0M   0% /proc/interrupts
+tmpfs                    64.0M         0     64.0M   0% /proc/kcore
+tmpfs                    64.0M         0     64.0M   0% /proc/keys
+tmpfs                    64.0M         0     64.0M   0% /proc/latency_stats
+tmpfs                     7.4G         0      7.4G   0% /proc/scsi
+tmpfs                    64.0M         0     64.0M   0% /proc/timer_list
+tmpfs                     7.4G         0      7.4G   0% /sys/firmware
