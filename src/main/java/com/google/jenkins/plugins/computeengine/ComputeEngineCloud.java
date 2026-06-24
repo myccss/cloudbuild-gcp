@@ -76,7 +76,6 @@ import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.interceptor.RequirePOST;
-import sun.text.resources.cldr.ext.FormatData_vai;
 
 @Getter
 @Log
@@ -100,7 +99,7 @@ public class ComputeEngineCloud extends AbstractCloudImpl {
     private String googleApiProxyHost;
     private Integer googleApiProxyPort;
     private String googleApiProxyUsername;
-    private String googleApiProxyPassword;
+    private Secret googleApiProxyPassword;
 
     @DataBoundConstructor
     public ComputeEngineCloud(String cloudName, String projectId, String credentialsId, String instanceCapStr) {

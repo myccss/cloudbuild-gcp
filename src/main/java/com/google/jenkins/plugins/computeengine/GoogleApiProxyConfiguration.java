@@ -3,7 +3,6 @@ package com.google.jenkins.plugins.computeengine;
 import com.google.common.base.Strings;
 import hudson.Util;
 import hudson.util.Secret;
-import jdk.internal.joptsimple.internal.Strings;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -15,7 +14,7 @@ public final class GoogleApiProxyConfiguration {
     private final String username;
     private final Secret password;
 
-    public GoogleApiProxyConfiguration(String host, Integer port, String username, String password) {
+    public GoogleApiProxyConfiguration(String host, Integer port, String username, Secret password) {
         this.host = Util.fixEmptyAndTrim(host);
         this.port = port;
         this.username = Util.fixEmptyAndTrim(username);

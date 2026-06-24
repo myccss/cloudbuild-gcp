@@ -40,8 +40,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.opencensus.internal.DefaultVisibilityForTesting;
-import jdk.internal.math.FormattedFloatingDecimal;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;

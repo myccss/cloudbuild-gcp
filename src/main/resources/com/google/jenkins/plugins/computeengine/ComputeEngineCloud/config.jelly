@@ -35,7 +35,7 @@
             <f:textbox/>
         </f:entry>
         <f:entry field="googleApiProxyPort" title="Proxy Port">
-             <f:number min="1" max="65535" step="1">
+             <f:number min="1" max="65535" step="1"/>
         </f:entry>
         <f:entry field="googleApiProxyUsername" title="Proxy Username">
             <f:textbox/>

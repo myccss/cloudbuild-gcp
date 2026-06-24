@@ -1,11 +1,14 @@
 package com.google.jenkins.plugins.computeengine.client;
 
+import com.google.api.client.googleapis.GoogleUtils;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.javanet.ConnectionFactory;
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.compute.Compute;
 import com.google.cloud.graphite.platforms.plugin.client.ClientFactory;
@@ -13,15 +16,26 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.jenkins.plugins.computeengine.ComputeEngineScopeRequirement;
+import com.google.jenkins.plugins.computeengine.GoogleApiProxyConfiguration;
 import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2Credentials;
 import com.google.jenkins.plugins.credentials.oauth.GoogleRobotCredentials;
+import com.sun.org.apache.xerces.internal.dom.AbortException;
 import hudson.AbortException;
 import hudson.model.ItemGroup;
 import hudson.security.ACL;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+
+import jdk.javadoc.internal.doclets.toolkit.Messages;
+import jdk.nashorn.internal.ir.annotations.Immutable;
 import jenkins.model.Jenkins;
 
 /** Utilities for using the gcp-plugin-core clients. */
@@ -31,11 +45,11 @@ public class ClientUtil {
     /**
      * Creates a {@link ClientFactory} for generating the GCP API clients.
      *
-     * @param itemGroup The Jenkins context to use for retrieving the credentials.
+     * @param itemGroup          The Jenkins context to use for retrieving the credentials.
      * @param domainRequirements A list of domain requirements.
-     * @param credentialsId The ID of the credentials to use for generating clients.
-     * @param transport An {@link Optional} parameter that specifies the {@link HttpTransport} to use.
-     *     A default will be used if unspecified.
+     * @param credentialsId      The ID of the credentials to use for generating clients.
+     * @param transport          An {@link Optional} parameter that specifies the {@link HttpTransport} to use.
+     *                           A default will be used if unspecified.
      * @return A {@link ClientFactory} to get clients.
      * @throws AbortException If there was an error initializing the ClientFactory.
      */
@@ -64,13 +78,27 @@ public class ClientUtil {
     /**
      * Creates a {@link ClientFactory} for generating the GCP API clients.
      *
-     * @param itemGroup The Jenkins context to use for retrieving the credentials.
+     * @param itemGroup     The Jenkins context to use for retrieving the credentials.
      * @param credentialsId The ID of the credentials to use for generating clients.
      * @return A {@link ClientFactory} to get clients.
      * @throws AbortException If there was an error initializing the ClientFactory.
      */
     public static ClientFactory getClientFactory(ItemGroup itemGroup, String credentialsId) throws AbortException {
         return getClientFactory(itemGroup, ImmutableList.of(), credentialsId, Optional.empty());
+    }
+
+    public static ClientFactory getClientFactory(
+            ItemGroup iteamGroup, String credentialsId, GoogleApiProxyConfiguration proxyConfiguration)
+            throws AbortException {
+        try {
+            return getClientFactory(
+                    iteamGroup,
+                    ImmutableList.of(),
+                    credentialsId,
+                    Optional.ofNullable(createHttpTransport(proxyConfiguration)));
+        } catch (IOException | GeneralSecurityException ex) {
+            throw new AbortException(Messages.ClientFactory_FailedToInitializeHTTPTransport(ex));
+        }
     }
 
     private static GoogleRobotCredentials getRobotCredentials(
@@ -95,14 +123,55 @@ public class ClientUtil {
 
     public static ComputeClientV2 createComputeClientV2(String projectId, String credentialsId)
             throws GeneralSecurityException, IOException {
+        return createComputeClientV2(projectId, credentialsId, null);
+
+    }
+
+    public static ComputeClientV2 createComputeClientV2(
+            String projectId, String credentialsId, GoogleApiProxyConfiguration proxyConfiguration)
+            throws GeneralSecurityException, IOException {
         Credential httpRequestInitializer = ClientUtil.getGoogleCredential(
                 ClientUtil.getRobotCredentials(Jenkins.get(), ImmutableList.of(), credentialsId));
         Compute compute = new Compute.Builder(
-                        GoogleNetHttpTransport.newTrustedTransport(), new JacksonFactory(), httpRequestInitializer)
+                createHttpTransport(proxyConfiguration), new JacksonFactory(), httpRequestInitializer)
                 .setGoogleClientRequestInitializer(request ->
                         request.setRequestHeaders(request.getRequestHeaders().setUserAgent(APPLICATION_NAME)))
                 .setApplicationName(ClientUtil.APPLICATION_NAME)
                 .build();
         return new ComputeClientV2(projectId, compute);
+    }
+
+    public static HttpTransport createHttpTransport(GoogleApiProxyConfiguration proxyConfiguration)
+            throws GeneralSecurityException, IOException {
+        if (proxyConfiguration == null || !proxyConfiguration.isConfigured()) {
+            return GoogleNetHttpTransport.newTrustedTransport();
+        }
+        return new NetHttpTransport.Builder()
+                .trustCertificates(GoogleUtils.getCertificateTrustStore())
+                .setConnectionFactory(new ProxyAwareConnectionFactory(proxyConfiguration))
+                .build();
+    }
+
+    private static final class ProxyAwareConnectionFactory implements ConnectionFactory {
+        private final GoogleApiProxyConfiguration proxyConfiguration;
+
+        private ProxyAwareConnectionFactory(GoogleApiProxyConfiguration proxyConfiguration) {
+            this.proxyConfiguration = proxyConfiguration;
+        }
+
+        @Override
+        public HttpURLConnection openConnection(URL url) throws IOException {
+            Proxy proxy = new Proxy(
+                    Proxy.Type.HTTP,
+                    new InetSocketAddress(proxyConfiguration.getHost(), proxyConfiguration.getRequiredPort()));
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection(proxy);
+            if (proxyConfiguration.hasAuthentication()) {
+                String credentialsValue = proxyConfiguration.getUsername() + ":" + proxyConfiguration.getPlainTextPassword();
+                String encodedCredentials = Bsae64.getEncoder()
+                        .encodeToString(credentialsValue.getBytes(StandardCharsets.UTF_8));
+                connection.setRequestProperty("Proxy-Authorization", "Basic " + encodedCredentials);
+            }
+            return connection;
+        }
     }
 }
