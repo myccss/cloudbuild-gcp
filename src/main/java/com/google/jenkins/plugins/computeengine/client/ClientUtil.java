@@ -19,7 +19,6 @@ import com.google.jenkins.plugins.computeengine.ComputeEngineScopeRequirement;
 import com.google.jenkins.plugins.computeengine.GoogleApiProxyConfiguration;
 import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2Credentials;
 import com.google.jenkins.plugins.credentials.oauth.GoogleRobotCredentials;
-import com.sun.org.apache.xerces.internal.dom.AbortException;
 import hudson.AbortException;
 import hudson.model.ItemGroup;
 import hudson.security.ACL;
@@ -34,8 +33,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
-import jdk.javadoc.internal.doclets.toolkit.Messages;
-import jdk.nashorn.internal.ir.annotations.Immutable;
 import jenkins.model.Jenkins;
 
 /** Utilities for using the gcp-plugin-core clients. */
@@ -88,11 +85,11 @@ public class ClientUtil {
     }
 
     public static ClientFactory getClientFactory(
-            ItemGroup iteamGroup, String credentialsId, GoogleApiProxyConfiguration proxyConfiguration)
+            ItemGroup itemGroup, String credentialsId, GoogleApiProxyConfiguration proxyConfiguration)
             throws AbortException {
         try {
             return getClientFactory(
-                    iteamGroup,
+                    itemGroup,
                     ImmutableList.of(),
                     credentialsId,
                     Optional.ofNullable(createHttpTransport(proxyConfiguration)));
@@ -141,7 +138,7 @@ public class ClientUtil {
         return new ComputeClientV2(projectId, compute);
     }
 
-    public static HttpTransport createHttpTransport(GoogleApiProxyConfiguration proxyConfiguration)
+    private static HttpTransport createHttpTransport(GoogleApiProxyConfiguration proxyConfiguration)
             throws GeneralSecurityException, IOException {
         if (proxyConfiguration == null || !proxyConfiguration.isConfigured()) {
             return GoogleNetHttpTransport.newTrustedTransport();
@@ -166,9 +163,9 @@ public class ClientUtil {
                     new InetSocketAddress(proxyConfiguration.getHost(), proxyConfiguration.getRequiredPort()));
             HttpURLConnection connection = (HttpURLConnection) url.openConnection(proxy);
             if (proxyConfiguration.hasAuthentication()) {
-                String credentialsValue = proxyConfiguration.getUsername() + ":" + proxyConfiguration.getPlainTextPassword();
-                String encodedCredentials = Bsae64.getEncoder()
-                        .encodeToString(credentialsValue.getBytes(StandardCharsets.UTF_8));
+                String credentialValue = proxyConfiguration.getUsername() + ':' + proxyConfiguration.getPlainTextPassword();
+                String encodedCredentials = Base64.getEncoder()
+                        .encodeToString(credentialValue.getBytes(StandardCharsets.UTF_8));
                 connection.setRequestProperty("Proxy-Authorization", "Basic " + encodedCredentials);
             }
             return connection;
