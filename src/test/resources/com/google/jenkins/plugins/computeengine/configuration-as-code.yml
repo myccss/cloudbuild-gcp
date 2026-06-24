@@ -1,0 +1,84 @@
+jenkins:
+  clouds:
+    - computeEngine:
+        cloudName: jenkins-build
+        projectId: gce-jenkins
+        instanceCapStr: 53
+        credentialsId: gce-jenkins
+        googleApiProxyHost: proxy.internal
+        googleApiProxyPort: 3128
+        googleApiProxyUsername: proxy-user
+        googleApiProxyPassword: proxy-pass
+        noDelayProvisioning: false
+        configurations:
+          - namePrefix:         jenkins-agent-image
+            description:        Jenkins agent
+            launchTimeoutSecondsStr: 6
+            retentionTimeMinutesStr: 300
+            mode:               EXCLUSIVE
+            labelString:        jenkins-agent
+            numExecutorsStr:    1
+            runAsUser:          jenkins
+            remoteFs:           agent
+            javaExecPath:       "java"
+            oneShot:            true
+            createSnapshot:     false
+            minimumNumberOfInstances: 2
+            minimumNumberOfSpareInstances: 1
+            minimumNumberOfInstancesTimeRangeConfig:
+              activeFrom: "09:00"
+              activeTo: "17:00"
+              monday: true
+              tuesday: true
+              wednesday: true
+              thursday: true
+              friday: true
+              saturday: false
+              sunday: false
+            region:             "https://www.googleapis.com/compute/v1/projects/gce-jenkins/regions/europe-west1"
+            zone:               "https://www.googleapis.com/compute/v1/projects/gce-jenkins/zones/europe-west1-a"
+            template:           '' # tried not setting, added when 'saved' in UI
+            machineType:        "https://www.googleapis.com/compute/v1/projects/gce-jenkins/zones/europe-west1-a/machineTypes/n1-standard-2"
+            minCpuPlatform:     '' # tried not setting, added when 'saved' in UI
+            startupScript:      '' # tried not setting, added when 'saved' in UI
+            networkConfiguration:
+              sharedVpc:
+                projectId:      gce-jenkins-cloud-123456
+                region:         europe-west1
+                subnetworkShortName: gce-jenkins-cloud
+            networkTags:        jenkins-agent
+            networkInterfaceIpStackMode:
+              singleStack:
+                externalIPV4Address:    true
+            useInternalAddress: false
+            bootDiskSourceImageProject: gce-jenkins
+            bootDiskSourceImageName: "https://www.googleapis.com/compute/v1/projects/gce-jenkins/global/images/gce-jenkins-build-image"
+            bootDiskType:       "https://www.googleapis.com/compute/v1/projects/gce-jenkins/zones/europe-west1-a/diskTypes/pd-standard"
+            bootDiskSizeGbStr:  50
+            bootDiskAutoDelete: true
+            serviceAccountEmail: 'jenkins-test@gce-jenkins-ops.iam.gserviceaccount.com'
+            customMetadata:
+              - key: "my-custom-key"
+                value: "my-custom-value"
+              - key: "my-multiline-key"
+                value: "line1\nline2\nline3"
+            customLabels:
+              - key: "team"
+                value: "jenkins"
+              - key: "cost-center"
+                value: "ci-1234"
+            shieldedVmConfiguration:
+              enableSecureBoot: true
+              enableVtpm: true
+              enableIntegrityMonitoring: false
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - googleRobotPrivateKeyCredentials:
+              id: gce-jenkins
+              projectId: gce-jenkins
+              serviceAccountConfig:
+                jsonServiceAccountConfig:
+                  # The encoded version of {"client_email": "example@example.com"}
+                  secretJsonKey: 'eyJjbGllbnRfZW1haWwiOiAiZXhhbXBsZUBleGFtcGxlLmNvbSJ9'
