@@ -6,7 +6,7 @@ Behaviour.specify("[data-type='gcloud-provision']", 'gcloud-provision', -99, fun
     form.querySelector("[name='configuration']").value = e.dataset.configuration;
     buildFormTree(form);
 
-    if (typeof form.requestSubmit == "function") {
+    if (typeof form.requestSubmit === "function") {
       form.requestSubmit();
       return;
     }
