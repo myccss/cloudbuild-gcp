@@ -26,9 +26,10 @@
                     <j:forEach var="t" items="${it.configurations}">
                         <dd:custom>
                             <button class="jenkins-dropdown__item"
+                                    type="button"
                                     data-type="gcloud-provision"
                                     data-form="${formId}"
-                                    data-url="${t.description}">
+                                    data-configuration="${t.description}">
                                 ${t.description}
                             </button>
                         </dd:custom>
@@ -36,6 +37,7 @@
                 </l:overflowButton>
                 <f:form action="${rootURL}/${it.url}/provision" method="post" name="provision" id="${formId}">
                     <input type="hidden" name="configuration"/>
+                    <button type="submit" hidden="hidden" aria-hidden="true" tabindex="-1"></button>
                 </f:form>
                 <st:adjunct includes="com.google.jenkins.plugins.computeengine.ComputeEngineCloud.provision"/>
             </td>
