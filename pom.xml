@@ -62,8 +62,8 @@
   </scm>
 
   <properties>
-    <revision>4</revision>
-    <changelist>999999-SNAPSHOT</changelist>
+    <revision>5</revision>
+    <changelist>26062801-SNAPSHOT</changelist>
     <gitHubRepo>jenkinsci/${project.artifactId}-plugin</gitHubRepo>
     <!-- https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/ -->
     <jenkins.baseline>2.516</jenkins.baseline>
