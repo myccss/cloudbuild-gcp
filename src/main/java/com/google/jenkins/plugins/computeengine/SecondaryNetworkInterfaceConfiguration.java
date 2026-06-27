@@ -14,7 +14,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
 @Getter
-@Setter(onMethod = @_(@DataBoundSetter))
+@Setter(onMethod = @__(@DataBoundSetter))
 @EqualsAndHashCode
 public class SecondaryNetworkInterfaceConfiguration
         extends AbstractDescribableImpl<SecondaryNetworkInterfaceConfiguration> {
@@ -22,8 +22,7 @@ public class SecondaryNetworkInterfaceConfiguration
     private NetworkInterfaceIpStackMode networkInterfaceIpStackMode;
 
     @DataBoundConstructor
-    public SecondaryNetworkInterfaceConfiguration() {
-    }
+    public SecondaryNetworkInterfaceConfiguration() {}
 
     @Extension
     public static final class DescriptorImpl extends Descriptor<SecondaryNetworkInterfaceConfiguration> {

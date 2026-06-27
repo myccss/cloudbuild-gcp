@@ -120,7 +120,7 @@ public class AutofilledNetworkConfiguration extends NetworkConfiguration {
                 @AncestorInPath Jenkins context,
                 @QueryParameter("network") final String network,
                 @QueryParameter("region") @RelativePath("..") final String region,
-                @QueryParameter("region") @RelativePath("../..") final String nestedregion,
+                @QueryParameter("region") @RelativePath("../..") final String nestedRegion,
                 @QueryParameter("projectId") @RelativePath("../..") final String projectId,
                 @QueryParameter("projectId") @RelativePath("../../..") final String nestedProjectId,
                 @QueryParameter("credentialsId") @RelativePath("../..") final String credentialsId,
@@ -133,7 +133,7 @@ public class AutofilledNetworkConfiguration extends NetworkConfiguration {
                 @QueryParameter("googleApiProxyUsername") @RelativePath("../../..") final String nestedGoogleApiProxyUsername,
                 @QueryParameter("googleApiProxyPassword") @RelativePath("../..") final String googleApiProxyPassword,
                 @QueryParameter("googleApiProxyPassword") @RelativePath("../../..") final String nestedGoogleApiProxyPassword) {
-            String effectiveRegion = firstNonEmpty(region, nestedregion);
+            String effectiveRegion = firstNonEmpty(region, nestedRegion);
             String effectiveProjectId = firstNonEmpty(projectId, nestedProjectId);
             String effectiveCredentialsId = firstNonEmpty(credentialsId, nestedCredentialsId);
             String effectiveGoogleApiProxyHost = firstNonEmpty(googleApiProxyHost, nestedGoogleApiProxyHost);

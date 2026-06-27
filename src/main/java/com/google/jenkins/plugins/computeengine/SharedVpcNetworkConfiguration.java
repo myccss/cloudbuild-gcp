@@ -83,7 +83,7 @@ public class SharedVpcNetworkConfiguration extends NetworkConfiguration {
             String effectiveRegion = firstNonEmpty(region, nestedRegion);
             if (Strings.isNullOrEmpty(effectiveRegion)
                     || Strings.isNullOrEmpty(value)
-                    || !effectiveRegion.endswith(value)) {
+                    || !effectiveRegion.endsWith(value)) {
                 return FormValidation.error(
                         "The region you specify for a shared VPC should match the region selected in the 'Location' section above");
             }

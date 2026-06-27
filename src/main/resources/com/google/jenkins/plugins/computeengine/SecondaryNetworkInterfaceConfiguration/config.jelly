@@ -4,7 +4,7 @@
     descriptors="${descriptor.networkConfigurationDescriptors}"
     default="${descriptor.defaultNetworkConfiguration()}"/>
     <f:entry title="Network Interface IP stack type">
-    <f:hetero_radio field="networkInterfaceIpStackMode"
+    <f:hetero-radio field="networkInterfaceIpStackMode"
     descriptors="${descriptor.networkInterfaceIpStackModeDescriptors}"/>
     </f:entry>
 </j:jelly>
