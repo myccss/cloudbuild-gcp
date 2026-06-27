@@ -169,6 +169,9 @@ public class InstanceConfiguration implements Describable<InstanceConfiguration>
     private NetworkConfiguration networkConfiguration;
     private NetworkInterfaceIpStackMode networkInterfaceIpStackMode;
 
+    @Nullable
+    private SecondaryNetworkInterfaceConfiguration secondaryNetworkInterfaceConfiguration;
+
     @Deprecated
     private Boolean externalAddress;
 
@@ -789,12 +792,28 @@ public class InstanceConfiguration implements Describable<InstanceConfiguration>
     }
 
     private Tags tags() {
-        if (notNullOrEmpty(networkTags)) {
+        List<String> parsedTags = parseNetworkTags(networkTags);
+        if (!parsedTags.isEmpty()) {
             Tags tags = new Tags();
-            tags.setItems(Arrays.asList(networkTags.split(" ")));
+            tags.setItems(parsedTags);
             return tags;
         }
         return null;
+    }
+
+    @VisibleForTesting
+    static List<String> parseNetworkTags(String rawNetworkTags) {
+        List<String> parsedTags = new ArrayList<>();
+        if (!notNullOrEmpty(rawNetworkTags)) {
+            return parsedTags;
+        }
+
+        for (String tag : rawNetworkTags.split("[\\s,]+")) {
+            if (!tag.isEmpty()) {
+                parsedTags.add(tag);
+            }
+        }
+        return parsedTags;
     }
 
     @VisibleForTesting
@@ -896,15 +915,29 @@ public class InstanceConfiguration implements Describable<InstanceConfiguration>
     private List<NetworkInterface> networkInterfaces() {
         List<NetworkInterface> networkInterfaces = new ArrayList<>();
 
-        NetworkInterface networkInterface = networkInterfaceIpStackMode.getNetworkInterface();
+        networkInterfaces.add(buildNetworkInterface(networkConfiguration, networkInterfaceIpStackMode));
 
         // Don't include subnetwork name if using default
-        if (!networkConfiguration.getSubnetwork().equals("default")) {
-            networkInterface.setSubnetwork(stripSelfLinkPrefix(networkConfiguration.getSubnetwork()));
+        if (secondaryNetworkInterfaceConfiguration != null
+                && secondaryNetworkInterfaceConfiguration.getNetworkConfiguration() != null
+                && secondaryNetworkInterfaceConfiguration.getNetworkInterfaceIpStackMode() != null) {
+            networkInterfaces.add(buildNetworkInterface(
+                    secondaryNetworkInterfaceConfiguration.getNetworkConfiguration(),
+                    secondaryNetworkInterfaceConfiguration.getNetworkInterfaceIpStackMode()));
         }
 
-        networkInterfaces.add(networkInterface);
         return networkInterfaces;
+    }
+
+    private NetworkInterface buildNetworkInterface(
+            NetworkConfiguration configuredNetwork, NetworkInterfaceIpStackMode ipStackMode) {
+        NetworkInterface networkInterface = ipStackMode.getNetworkInterface();
+
+        if (!configuredNetwork.getSubnetwork().equals("default")) {
+            networkInterface.setSubnetwork(stripSelfLinkPrefix(configuredNetwork.getSubnetwork()));
+        }
+
+        return networkInterface;
     }
 
     private List<ServiceAccount> serviceAccounts() {
@@ -1020,9 +1053,15 @@ public class InstanceConfiguration implements Describable<InstanceConfiguration>
             }
 
             String re = "[a-z]([-a-z0-9]*[a-z0-9])?";
-            for (String tag : value.split(" ")) {
+            List<String> parsedTags = parseNetworkTags(value);
+            if (parsedTags.isEmpty()) {
+                return FormValidation.error("Provide one or more tags separated by spaces, commas, or new lines");
+            }
+            for (String tag : parsedTags) {
                 if (!tag.matches(re)) {
-                    return FormValidation.error("Tags must be space-delimited and each tag must match regex" + re);
+                    return FormValidation.error(
+                            "Tags must be separated by spaces, commas, or new lines, and each tag must match regex "
+                                    + re);
                 }
             }
 
@@ -1587,6 +1626,7 @@ public class InstanceConfiguration implements Describable<InstanceConfiguration>
             instanceConfiguration.setBootDiskSourceImageProject(this.bootDiskSourceImageProject);
             instanceConfiguration.setNetworkConfiguration(this.networkConfiguration);
             instanceConfiguration.setNetworkInterfaceIpStackMode(this.networkInterfaceIpStackMode);
+            instanceConfiguration.setSecondaryNetworkInterfaceConfiguration(this.secondaryNetworkInterfaceConfiguration);
             instanceConfiguration.setUseInternalAddress(this.useInternalAddress);
             instanceConfiguration.setIgnoreProxy(this.ignoreProxy);
             instanceConfiguration.setNetworkTags(this.networkTags);

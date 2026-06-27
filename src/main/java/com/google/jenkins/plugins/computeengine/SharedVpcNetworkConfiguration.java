@@ -32,6 +32,15 @@ public class SharedVpcNetworkConfiguration extends NetworkConfiguration {
     private final String subnetworkShortName;
     private final String region;
 
+    private static String firstNonEmpty(String... values) {
+        for (String value : values) {
+            if (!Strings.isNullOrEmpty(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     @DataBoundConstructor
     public SharedVpcNetworkConfiguration(String projectId, String region, String subnetworkShortName) {
         super("", String.format(SUBNETWORK_TEMPLATE, projectId, region, subnetworkShortName));
@@ -67,9 +76,14 @@ public class SharedVpcNetworkConfiguration extends NetworkConfiguration {
         }
 
         public FormValidation doCheckRegion(
-                @QueryParameter String value, @QueryParameter("region") @RelativePath("..") final String region) {
+                @QueryParameter String value,
+                @QueryParameter("region") @RelativePath("..") final String region,
+                @QueryParameter("region") @RelativePath("../..") final String nestedRegion) {
             checkPermissions(Jenkins.get(), Jenkins.ADMINISTER);
-            if (Strings.isNullOrEmpty(region) || Strings.isNullOrEmpty(value) || !region.endsWith(value)) {
+            String effectiveRegion = firstNonEmpty(region, nestedRegion);
+            if (Strings.isNullOrEmpty(effectiveRegion)
+                    || Strings.isNullOrEmpty(value)
+                    || !effectiveRegion.endswith(value)) {
                 return FormValidation.error(
                         "The region you specify for a shared VPC should match the region selected in the 'Location' section above");
             }

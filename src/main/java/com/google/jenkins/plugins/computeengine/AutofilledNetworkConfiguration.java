@@ -37,6 +37,15 @@ import org.kohsuke.stapler.QueryParameter;
 public class AutofilledNetworkConfiguration extends NetworkConfiguration {
     private static final Logger LOGGER = Logger.getLogger(AutofilledNetworkConfiguration.class.getName());
 
+    private static String firstNonEmpty(String... values) {
+        for (String value : values) {
+            if (!Strings.isNullOrEmpty(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     @DataBoundConstructor
     public AutofilledNetworkConfiguration(String network, String subnetwork) {
         super(network, subnetwork);
@@ -55,25 +64,37 @@ public class AutofilledNetworkConfiguration extends NetworkConfiguration {
         public ListBoxModel doFillNetworkItems(
                 @AncestorInPath Jenkins context,
                 @QueryParameter("projectId") @RelativePath("../..") final String projectId,
+                @QueryParameter("projectId") @RelativePath("../../..") final String nestedProjectId,
                 @QueryParameter("credentialsId") @RelativePath("../..") final String credentialsId,
+                @QueryParameter("credentialsId") @RelativePath("../../..") final String nestedCredentialsId,
                 @QueryParameter("googleApiProxyHost") @RelativePath("../..") final String googleApiProxyHost,
+                @QueryParameter("googleApiProxyHost") @RelativePath("../../..") final String nestedGoogleApiProxyHost,
                 @QueryParameter("googleApiProxyPort") @RelativePath("../..") final String googleApiProxyPort,
+                @QueryParameter("googleApiProxyPort") @RelativePath("../../..") final String nestedGoogleApiProxyPort,
                 @QueryParameter("googleApiProxyUsername") @RelativePath("../..") final String googleApiProxyUsername,
-                @QueryParameter("googleApiProxyPassword") @RelativePath("../..") final String googleApiProxyPassword) {
-                checkPermissions(Jenkins.get(), Jenkins.ADMINISTER);
+                @QueryParameter("googleApiProxyUsername") @RelativePath("../../..") final String nestedGoogleApiProxyUsername,
+                @QueryParameter("googleApiProxyPassword") @RelativePath("../..") final String googleApiProxyPassword,
+                @QueryParameter("googleApiProxyPassword") @RelativePath("../../..") final String nestedGoogleApiProxyPassword) {
+            String effectiveProjectId = firstNonEmpty(projectId, nestedProjectId);
+            String effectiveCredentialsId = firstNonEmpty(credentialsId, nestedCredentialsId);
+            String effectiveGoogleApiProxyHost = firstNonEmpty(googleApiProxyHost, nestedGoogleApiProxyHost);
+            String effectiveGoogleApiProxyPort = firstNonEmpty(googleApiProxyPort, nestedGoogleApiProxyPort);
+            String effectiveGoogleApiProxyUsername = firstNonEmpty(googleApiProxyUsername, nestedGoogleApiProxyUsername);
+            String effectiveGoogleApiProxyPassword = firstNonEmpty(googleApiProxyPassword, nestedGoogleApiProxyPassword);
+            checkPermissions(Jenkins.get(), Jenkins.ADMINISTER);
             ListBoxModel items = new ListBoxModel();
             items.add("");
 
             try {
                 ComputeClient compute = computeClient(
                         context,
-                        credentialsId,
+                        effectiveCredentialsId,
                         GoogleApiProxyConfiguration.fromFormFields(
-                                googleApiProxyHost,
-                                googleApiProxyPort,
-                                googleApiProxyUsername,
-                                googleApiProxyPassword));
-                List<Network> networks = compute.listNetworks(projectId);
+                                effectiveGoogleApiProxyHost,
+                                effectiveGoogleApiProxyPort,
+                                effectiveGoogleApiProxyUsername,
+                                effectiveGoogleApiProxyPassword));
+                List<Network> networks = compute.listNetworks(effectiveProjectId);
 
                 for (Network n : networks) {
                     items.add(n.getName(), n.getSelfLink());
@@ -99,29 +120,43 @@ public class AutofilledNetworkConfiguration extends NetworkConfiguration {
                 @AncestorInPath Jenkins context,
                 @QueryParameter("network") final String network,
                 @QueryParameter("region") @RelativePath("..") final String region,
+                @QueryParameter("region") @RelativePath("../..") final String nestedregion,
                 @QueryParameter("projectId") @RelativePath("../..") final String projectId,
+                @QueryParameter("projectId") @RelativePath("../../..") final String nestedProjectId,
                 @QueryParameter("credentialsId") @RelativePath("../..") final String credentialsId,
+                @QueryParameter("credentialsId") @RelativePath("../../..") final String nestedCredentialsId,
                 @QueryParameter("googleApiProxyHost") @RelativePath("../..") final String googleApiProxyHost,
+                @QueryParameter("googleApiProxyHost") @RelativePath("../../..") final String nestedGoogleApiProxyHost,
                 @QueryParameter("googleApiProxyPort") @RelativePath("../..") final String googleApiProxyPort,
+                @QueryParameter("googleApiProxyPort") @RelativePath("../../..") final String nestedGoogleApiProxyPort,
                 @QueryParameter("googleApiProxyUsername") @RelativePath("../..") final String googleApiProxyUsername,
-                @QueryParameter("googleApiProxyPassword") @RelativePath("../..") final String googleApiProxyPassword) {
+                @QueryParameter("googleApiProxyUsername") @RelativePath("../../..") final String nestedGoogleApiProxyUsername,
+                @QueryParameter("googleApiProxyPassword") @RelativePath("../..") final String googleApiProxyPassword,
+                @QueryParameter("googleApiProxyPassword") @RelativePath("../../..") final String nestedGoogleApiProxyPassword) {
+            String effectiveRegion = firstNonEmpty(region, nestedregion);
+            String effectiveProjectId = firstNonEmpty(projectId, nestedProjectId);
+            String effectiveCredentialsId = firstNonEmpty(credentialsId, nestedCredentialsId);
+            String effectiveGoogleApiProxyHost = firstNonEmpty(googleApiProxyHost, nestedGoogleApiProxyHost);
+            String effectiveGoogleApiProxyPort = firstNonEmpty(googleApiProxyPort, nestedGoogleApiProxyPort);
+            String effectiveGoogleApiProxyUsername = firstNonEmpty(googleApiProxyUsername, nestedGoogleApiProxyUsername);
+            String effectiveGoogleApiProxyPassword = firstNonEmpty(googleApiProxyPassword, nestedGoogleApiProxyPassword);
             checkPermissions(Jenkins.get(), Jenkins.ADMINISTER);
             ListBoxModel items = new ListBoxModel();
 
-            if (Strings.isNullOrEmpty(region)) {
+            if (Strings.isNullOrEmpty(effectiveRegion)) {
                 return items;
             }
 
             try {
                 ComputeClient compute = computeClient(
                         context,
-                        credentialsId,
+                        effectiveCredentialsId,
                         GoogleApiProxyConfiguration.fromFormFields(
-                                googleApiProxyHost,
-                                googleApiProxyPort,
-                                googleApiProxyUsername,
-                                googleApiProxyPassword));
-                List<Subnetwork> subnetworks = compute.listSubnetworks(projectId, network, region);
+                                effectiveGoogleApiProxyHost,
+                                effectiveGoogleApiProxyPort,
+                                effectiveGoogleApiProxyUsername,
+                                effectiveGoogleApiProxyPassword));
+                List<Subnetwork> subnetworks = compute.listSubnetworks(effectiveProjectId, network, effectiveRegion);
 
                 if (subnetworks.size() <= 1) {
                     items.add(new ListBoxModel.Option("", "", false));

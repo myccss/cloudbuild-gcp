@@ -166,13 +166,17 @@
                     <f:dropdownDescriptorSelector title="General" field="networkConfiguration"
                                           descriptors="${descriptor.networkConfigurationDescriptors}"
                                           default="${descriptor.defaultNetworkConfiguration()}"/>
-                    <f:entry title="${%Network tags}" field="networkTags">
-                        <f:textbox/>
+                    <f:entry title="${%Network tags}" field="networkTags"
+                    description="${%Separate tags with spaces, commas, or new lines}">
+                        <f:textarea/>
                     </f:entry>
                     <f:entry title="Network Interface IP stack type">
                         <f:hetero-radio field="networkInterfaceIpStackMode"
                                         descriptors="${descriptor.networkInterfaceIpStackModeDescriptors}"/>
                     </f:entry>
+                    <f:optionalProperty field="secondaryNetworkInterfaceConfiguration" title="Add secondary network interface?">
+                        <st:include page="config.jelly" class="${descriptor.clazz}"/>
+                    </f:optionalProperty>
                 </f:section>
 
                 <f:section title="Boot Disk">

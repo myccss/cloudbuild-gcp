@@ -1,0 +1,10 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+    <f:dropdownDescriptorSelector title="General" field="networkConfiguration"
+    descriptors="${descriptor.networkConfigurationDescriptors}"
+    default="${descriptor.defaultNetworkConfiguration()}"/>
+    <f:entry title="Network Interface IP stack type">
+    <f:hetero_radio field="networkInterfaceIpStackMode"
+    descriptors="${descriptor.networkInterfaceIpStackModeDescriptors}"/>
+    </f:entry>
+</j:jelly>

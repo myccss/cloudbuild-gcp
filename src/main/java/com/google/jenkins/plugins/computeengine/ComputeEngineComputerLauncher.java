@@ -483,36 +483,7 @@ public abstract class ComputeEngineComputerLauncher extends ComputerLauncher {
 
                 String host = "";
 
-                // TODO(google-compute-engine-plugin/issues/136): handle multiple NICs
-                NetworkInterface nic = instance.getNetworkInterfaces().get(0);
-
-                if (this.useInternalAddress) {
-                    host = nic.getNetworkIP();
-                } else {
-                    // Look for a public IPv4 address
-                    if (nic.getAccessConfigs() != null) {
-                        for (AccessConfig ac : nic.getAccessConfigs()) {
-                            if (ac.getType().equals(NetworkInterfaceIpStackMode.NAT_TYPE)) {
-                                host = ac.getNatIP();
-                            }
-                        }
-                    }
-                    // Look for a public IPv6 address
-                    // TODO: IPv6 address is preferred compared to IPv4, we could let the user select
-                    //  his preferences to prioritize them.
-                    if (nic.getIpv6AccessConfigs() != null) {
-                        for (AccessConfig ac : nic.getIpv6AccessConfigs()) {
-                            if (ac.getType().equals(NetworkInterfaceDualStack.IPV6_TYPE)) {
-                                host = ac.getExternalIpv6();
-                            }
-                        }
-                    }
-                    // No public address found. Fall back to internal address
-                    if (host.isEmpty()) {
-                        host = nic.getNetworkIP();
-                        logInfo(computer, listener, "No public address found. Fall back to internal address.");
-                    }
-                }
+                host = resolveHost(instance, computer, listener);
 
                 int port = node.getSshPort();
                 logInfo(
@@ -569,6 +540,28 @@ public abstract class ComputeEngineComputerLauncher extends ComputerLauncher {
                 Thread.sleep(SSH_SLEEP_MILLIS);
             }
         }
+    }
+
+    private String resolveHost(Instance instance, ComputeEngineComputer computer, TaskListener listener) {
+        String host = resolveSshHost(instance.getNetworkInterfaces(), useInternalAddress);
+        if (!host.isEmpty()) {
+            logInfo(computer, listener, "Using the first network interface internal address for SSH.");
+        }
+        return host;
+    }
+
+    @VisibleForTesting
+    static String resolveSshHost(List<NetworkInterface> networkInterfaces, boolean useInternalAddress) {
+        if (networkInterfaces == null || networkInterfaces.isEmpty()) {
+            return "";
+        }
+
+        NetworkInterface firstNic = networkInterfaces.get(0);
+        if (firstNic == null) {
+            return "";
+        }
+
+        return firstNic.getNetworkIP() == null ? "" : firstNic.getNetworkIP();
     }
 
     /**
