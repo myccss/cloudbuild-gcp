@@ -119,4 +119,9 @@ public class ComputeEngineLinuxLauncher extends ComputeEngineComputerLauncher {
     protected String getPathSeparator() {
         return "/";
     }
+
+    @Override
+    protected String decorateRemoteCommand(String command) {
+        return "sudo -n " + command;
+    }
 }

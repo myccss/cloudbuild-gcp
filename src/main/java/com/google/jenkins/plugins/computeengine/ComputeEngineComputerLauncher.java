@@ -376,6 +376,10 @@ public abstract class ComputeEngineComputerLauncher extends ComputerLauncher {
 
     protected abstract String getPathSeparator();
 
+    protected String decorateRemoteCommand(String command) {
+        return command;
+    }
+
     private boolean checkJavaInstalled(
             ComputeEngineComputer computer,
             Connection conn,
@@ -383,7 +387,8 @@ public abstract class ComputeEngineComputerLauncher extends ComputerLauncher {
             TaskListener listener,
             String javaExecPath) {
         try {
-            if (testCommand(computer, conn, String.format("%s -fullversion", javaExecPath), logger, listener)) {
+            String javaCheckCommand = decorateRemoteCommand(String.format("%s -fullversion", javaExecPath));
+            if (testCommand(computer, conn, javaCheckCommand, logger, listener)) {
                 return true;
             }
         } catch (IOException | InterruptedException ex) {
@@ -430,7 +435,7 @@ public abstract class ComputeEngineComputerLauncher extends ComputerLauncher {
             }
             String jenkinsDir = node.getRemoteFS();
             copyAgentJar(computer, conn, listener, jenkinsDir);
-            String launchString = getJavaLaunchString(javaExecPath, jenkinsDir);
+            String launchString = decorateRemoteCommand(getJavaLaunchString(javaExecPath, jenkinsDir));
             logInfo(computer, listener, "Launching Jenkins agent via plugin SSH: " + launchString);
             sess = conn.openSession();
             sess.execCommand(launchString);
